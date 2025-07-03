@@ -1,0 +1,52 @@
+{
+  "id": "1dcu6x492r",
+  "video_id": "1dcu6x492r",
+  "name": "L1_091004f349688522f773afc884451c9af6da18fb_Trim_20250624_100057",
+  "description": null,
+  "language": "he-IL",
+  "speakers": [
+    "Speaker #1"
+  ],
+  "created_date": "2025-06-24T10:01:51.983114",
+  "video_indexer_url": "https://www.videoindexer.ai/embed/player/a5e5a78b-1a1a-46a8-842e-09f4988a4a47/1dcu6x492r?location=eastus",
+  "transcript_segments": [
+    {
+      "text": "תודה. אנחנו מתחילים במבוא.",
+      "start_time": "0:00:01.03",
+      "end_time": "0:00:04.91",
+      "start_seconds": 1,
+      "end_seconds": 4,
+      "duration": 3,
+      "confidence": 0.4835
+    },
+    {
+      "text": "אנחנו מתחילים במבוא לליבריקה.",
+      "start_time": "0:00:10.16",
+      "end_time": "0:00:12.6",
+      "start_seconds": 10,
+      "end_seconds": 12,
+      "duration": 2,
+      "confidence": 0.7815
+    },
+    {
+      "text": "טוב אז מה זה פסוק מבחינתנו פסוק זה איזה שהיא טענה שאנחנו יכולים לחוות עליה טרופול פסוק הוא טענה שניתן לחוות עליה.",
+      "start_time": "0:00:16.12",
+      "end_time": "0:00:30.24",
+      "start_seconds": 16,
+      "end_seconds": 30,
+      "duration": 14,
+      "confidence": 0.8144
+    }
+  ],
+  "full_transcript": "תודה. אנחנו מתחילים במבוא. אנחנו מתחילים במבוא לליבריקה. טוב אז מה זה פסוק מבחינתנו פסוק זה איזה שהיא טענה שאנחנו יכולים לחוות עליה טרופול פסוק הוא טענה שניתן לחוות עליה.",
+  "segment_start_times": [
+    "0:00:01.03",
+    "0:00:10.16",
+    "0:00:16.12"
+  ],
+  "segment_start_seconds": [
+    1,
+    10,
+    16
+  ]
+}
