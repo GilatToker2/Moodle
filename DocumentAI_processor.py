@@ -135,10 +135,12 @@ def save_markdown(md: str, orig_path: str, out_dir: str = "docs_md") -> str | No
 if __name__ == "__main__":
     # Example usage: replace with whatever paths you want
     files_to_process = [
-        # r"Docs\sample.pdf",
-        # r"Docs\DL_14_LLMs.pptx",
+        r"Docs\Ex5Sol.pdf",
+        r"Docs\bdida_tirgul_02.pdf",
+        r"Docs\דף נוסחאות בדידה.pdf",
+        r"Docs\DL_14_LLMs.pptx",
         r"Docs\1002806.docx",
-        # r"Docs\4387683.png",
+        r"Docs\4387683.png",
         r"Docs\4375695.doc",
     ]
 

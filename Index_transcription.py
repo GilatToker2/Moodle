@@ -8,7 +8,10 @@ Core workflow:
 3. Generate embeddings for chunks
 4. Push chunks to Azure AI Search index
 """
-
+###############################
+##############################
+##############################
+########################
 import uuid
 import openai
 import tiktoken
@@ -18,7 +21,7 @@ from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import (
     SearchIndex, SimpleField, SearchableField, SearchFieldDataType,
     VectorSearch, VectorSearchAlgorithmConfiguration, VectorSearchProfile,
-    SearchField
+    SearchField, SemanticConfiguration, SemanticPrioritizedFields, SemanticField, SemanticSearch
 )
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
@@ -111,7 +114,24 @@ class VideoChunkIndexer:
                             sortable=True),
             ]
 
-            index = SearchIndex(name=self.index_name, fields=fields, vector_search=vector_search)
+            # Semantic search configuration
+            semantic_config = SemanticConfiguration(
+                name="default",
+                prioritized_fields=SemanticPrioritizedFields(
+                    content_fields=[SemanticField(field_name="text")],
+                    keywords_fields=[SemanticField(field_name="video_name")]
+                )
+            )
+
+            semantic_search = SemanticSearch(configurations=[semantic_config])
+
+            index = SearchIndex(
+                name=self.index_name,
+                fields=fields,
+                vector_search=vector_search,
+                semantic_search=semantic_search
+            )
+
             self.index_client.create_or_update_index(index)
             print("✅ Index created successfully")
             return True
@@ -456,7 +476,7 @@ def main():
     print("=" * 50)
 
     # Test with the specific MD file
-    md_file = "videos_md/L1_091004f349688522f773afc884451c9af6da18fb.md"
+    md_file = "videos_md/L9_18f0d24bb7e45223abf842cdc1274de65fc7d620 - Trim.md"
 
     print("🧪 Testing with MD file...")
     success = test_indexer_with_md_file(md_file, False)
