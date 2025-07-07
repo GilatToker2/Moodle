@@ -8,7 +8,7 @@ Core workflow:
 3. Generate embeddings for chunks
 4. Push chunks to Azure AI Search index
 
-Based on Index_transcription.py but adapted for documents instead of videos
+Based on Index_videos.py but adapted for documents instead of videos
 """
 
 import uuid

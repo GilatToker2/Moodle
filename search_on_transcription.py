@@ -1,6 +1,6 @@
 """
 Advanced Video Search - Advanced search system for video transcriptions
-Based on the index created with Index_transcription.py
+Based on the index created with Index_videos.py
 """
 import logging
 from typing import List, Dict, Optional, Tuple

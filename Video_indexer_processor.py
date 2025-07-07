@@ -690,7 +690,7 @@ def process_video_from_path(self, video_path: str) -> Dict:
 
 if __name__ == "__main__":
     # Example usage with local video file
-    video_file_path = r"Lectures\L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4"
+    video_file_path = r"Lectures\L2_d1847b82963a0ef0fc97d72ef5602cf785490bf1.mp4"
 
     try:
         # Process video with segment merging (30 seconds max per segment)

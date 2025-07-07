@@ -537,94 +537,206 @@ def index_document_from_data(document_data: Dict, create_new_index: bool = False
     return True
 
 
-# Import functions from existing modules for parsing
+# Parsing functions - embedded from original modules
+
 def parse_video_md_to_structured_data(md_file_path: str) -> Dict:
-    """Parse video MD file - imported from Index_videos.py"""
-    from Index_videos import parse_md_to_structured_data
-    return parse_md_to_structured_data(md_file_path)
+    """
+    Parse video MD file and convert to structured data format expected by indexer
+    Based on parse_md_to_structured_data from Index_videos.py
+    """
+    import re
+    import os
+
+    print(f"📖 Reading video MD file: {md_file_path}")
+
+    with open(md_file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Extract video information
+    video_id_match = re.search(r'\*\*Video ID\*\*: (\w+)', content)
+    video_id = video_id_match.group(1) if video_id_match else "unknown"
+
+    duration_match = re.search(r'\*\*Duration\*\*: ([\d:]+)', content)
+    duration = duration_match.group(1) if duration_match else "N/A"
+
+    language_match = re.search(r'\*\*Language\*\*: ([\w-]+)', content)
+    language = language_match.group(1) if language_match else "he-IL"
+
+    speakers_match = re.search(r'\*\*Speakers\*\*: (.+)', content)
+    speakers = [speakers_match.group(1)] if speakers_match else ["מרצה"]
+
+    created_match = re.search(r'\*\*Created\*\*: (.+)', content)
+    created_date = created_match.group(1) if created_match else datetime.now().isoformat()
+
+    # Extract keywords
+    keywords_match = re.search(r'## 🔍 Keywords\n`(.+)`', content)
+    keywords = []
+    if keywords_match:
+        keywords_text = keywords_match.group(1)
+        keywords = [kw.strip() for kw in keywords_text.split('`,') if kw.strip()]
+        # Clean up the last keyword
+        if keywords:
+            keywords[-1] = keywords[-1].rstrip('`')
+
+    # Extract topics
+    topics_match = re.search(r'## 🏷️ Topics\n`(.+)`', content)
+    topics = []
+    if topics_match:
+        topics_text = topics_match.group(1)
+        topics = [topic.strip() for topic in topics_text.split('`,') if topic.strip()]
+        # Clean up the last topic
+        if topics:
+            topics[-1] = topics[-1].rstrip('`')
+
+    # Extract transcript segments with timestamps
+    transcript_segments = []
+    timestamp_pattern = r'\*\*\[([^\]]+)\]\*\* (.+)'
+
+    # Find all timestamp entries
+    timestamp_matches = re.findall(timestamp_pattern, content)
+
+    for i, (timestamp, text) in enumerate(timestamp_matches):
+        # Convert timestamp to seconds
+        start_seconds = convert_timestamp_to_seconds(timestamp)
+
+        segment = {
+            "text": text.strip(),
+            "start_time": timestamp,
+            "start_seconds": start_seconds,
+            "end_seconds": start_seconds + 5.0,  # Default 5 seconds duration
+            "confidence": 0.9
+        }
+        transcript_segments.append(segment)
+
+    # Create structured data
+    structured_data = {
+        "id": video_id,
+        "name": f"Video {video_id}",
+        "duration": duration,
+        "language": language,
+        "speakers": speakers,
+        "keywords": keywords,
+        "topics": topics,
+        "created_date": created_date,
+        "transcript_segments": transcript_segments
+    }
+
+    print(f"✅ Parsed video MD file:")
+    print(f"  - Video ID: {video_id}")
+    print(f"  - Duration: {duration}")
+    print(f"  - Segments: {len(transcript_segments)}")
+    print(f"  - Keywords: {len(keywords)}")
+    print(f"  - Topics: {len(topics)}")
+
+    return structured_data
+
+
+def convert_timestamp_to_seconds(timestamp: str) -> float:
+    """Convert timestamp like '0:00:01.03' to seconds"""
+    try:
+        # Handle format like "0:00:01.03"
+        parts = timestamp.split(':')
+        if len(parts) == 3:
+            hours = float(parts[0])
+            minutes = float(parts[1])
+            seconds = float(parts[2])
+            return hours * 3600 + minutes * 60 + seconds
+        elif len(parts) == 2:
+            minutes = float(parts[0])
+            seconds = float(parts[1])
+            return minutes * 60 + seconds
+        else:
+            return float(timestamp)
+    except:
+        return 0.0
 
 
 def parse_document_md_to_data(md_file_path: str) -> Dict:
-    """Parse document MD file - imported from index_docs.py"""
-    from index_docs import parse_md_to_document_data
-    return parse_md_to_document_data(md_file_path)
-
-
-def test_unified_indexer_with_video_md(md_file_path: str, create_new_index: bool = True) -> bool:
     """
-    Test the unified indexer with a video MD file
-    Similar to the original Index_videos.py test function
+    Parse document MD file and convert to document data format expected by indexer
+    Based on parse_md_to_document_data from index_docs.py
+    """
+    import os
+
+    print(f"📖 Reading document MD file: {md_file_path}")
+
+    with open(md_file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Extract document info from filename
+    base_name = os.path.splitext(os.path.basename(md_file_path))[0]
+
+    # Create document data
+    document_data = {
+        "id": base_name,
+        "name": base_name.replace('_', ' ').replace('-', ' '),
+        "content": content,
+        "type": "markdown"
+    }
+
+    print(f"✅ Parsed document MD file:")
+    print(f"  - Document ID: {document_data['id']}")
+    print(f"  - Document Name: {document_data['name']}")
+    print(f"  - Content Length: {len(content)} characters")
+
+    return document_data
+
+
+def index_content_file(file_path: str, content_type: str, create_new_index: bool = False) -> bool:
+    """
+    פונקציה כללית לאינדוקס קובץ תוכן לפי הסוג שלו
 
     Args:
-        md_file_path: Path to the video MD file
-        create_new_index: If True (default), create new index. If False, add to existing index.
-    """
-    print("🧪 Testing Unified Video Indexer with MD File")
-    print("=" * 50)
+        file_path: נתיב לקובץ MD
+        content_type: סוג התוכן - "video" או "document"
+        create_new_index: האם ליצור אינדקס חדש או להוסיף לקיים
 
-    if create_new_index:
-        print("🔄 Mode: Creating NEW unified index (will delete existing)")
-    else:
-        print("➕ Mode: Adding to EXISTING unified index")
+    Returns:
+        bool: האם האינדוקס הצליח
+    """
+    print(f"📁 Indexing content file: {file_path}")
+    print(f"📋 Content type: {content_type}")
+    print(f"🔧 Create new index: {create_new_index}")
+    print("=" * 60)
 
     try:
-        # Parse MD file to structured data
-        structured_data = parse_video_md_to_structured_data(md_file_path)
+        if content_type.lower() == "video":
+            # Parse video MD file to structured data
+            structured_data = parse_video_md_to_structured_data(file_path)
 
-        # Test the indexer
-        print("\n📤 Starting video indexing process...")
-        success = index_video_from_data(structured_data, create_new_index=create_new_index)
+            # Index the video
+            success = index_video_from_data(structured_data, create_new_index=create_new_index)
 
-        if success:
-            print("\n✅ Successfully indexed video from MD file!")
-            print("🔍 The video chunks should now be searchable in the unified index")
+            if success:
+                print("\n✅ Successfully indexed video from MD file!")
+                print("🔍 The video chunks are now searchable in the unified index")
+            else:
+                print("\n❌ Failed to index video from MD file")
+
+            return success
+
+        elif content_type.lower() == "document":
+            # Parse document MD file to document data
+            document_data = parse_document_md_to_data(file_path)
+
+            # Index the document
+            success = index_document_from_data(document_data, create_new_index=create_new_index)
+
+            if success:
+                print("\n✅ Successfully indexed document from MD file!")
+                print("🔍 The document chunks are now searchable in the unified index")
+            else:
+                print("\n❌ Failed to index document from MD file")
+
+            return success
+
         else:
-            print("\n❌ Failed to index video from MD file")
-
-        return success
+            print(f"❌ Unsupported content type: {content_type}")
+            print("✅ Supported types: 'video', 'document'")
+            return False
 
     except Exception as e:
-        print(f"❌ Error testing video indexer: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def test_unified_indexer_with_document_md(md_file_path: str, create_new_index: bool = False) -> bool:
-    """
-    Test the unified indexer with a document MD file
-    Similar to the original index_docs.py test function
-
-    Args:
-        md_file_path: Path to the document MD file
-        create_new_index: If True, create new index. If False (default), add to existing index.
-    """
-    print("🧪 Testing Unified Document Indexer with MD File")
-    print("=" * 50)
-
-    if create_new_index:
-        print("🔄 Mode: Creating NEW unified index (will delete existing)")
-    else:
-        print("➕ Mode: Adding to EXISTING unified index")
-
-    try:
-        # Parse MD file to document data
-        document_data = parse_document_md_to_data(md_file_path)
-
-        # Test the indexer
-        print("\n📤 Starting document indexing process...")
-        success = index_document_from_data(document_data, create_new_index=create_new_index)
-
-        if success:
-            print("\n✅ Successfully indexed document from MD file!")
-            print("🔍 The document chunks should now be searchable in the unified index")
-        else:
-            print("\n❌ Failed to index document from MD file")
-
-        return success
-
-    except Exception as e:
-        print(f"❌ Error testing document indexer: {e}")
+        print(f"❌ Error indexing content file: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -635,25 +747,24 @@ def main():
     print("🚀 Unified Content Indexer - Videos + Documents")
     print("=" * 60)
 
-    # # Step 1: Create new index with video content
-    # print("\n📹 Step 1: Creating new unified index with video content")
-    # video_md_file = "videos_md/L9_18f0d24bb7e45223abf842cdc1274de65fc7d620 - Trim.md"
-    #
-    # video_success = test_unified_indexer_with_video_md(video_md_file, create_new_index=True)
-    #
-    # if not video_success:
-    #     print("\n❌ Video indexing failed - stopping")
-    #     return
+    # Step 1: Create new index with video content
+    print("\n📹 Step 1: Creating new unified index with video content")
+    video_file = "videos_md/L9_18f0d24bb7e45223abf842cdc1274de65fc7d620 - Trim.md"
+    video_success = index_content_file(video_file, "video", create_new_index=True)
+
+    if not video_success:
+        print("\n❌ Video indexing failed - stopping")
+        return
 
     # Step 2: Update existing index with document content
     print("\n📄 Step 2: Adding document content to existing unified index")
-    doc_md_file = "docs_md/Ex5Sol.md"
-
-    doc_success = test_unified_indexer_with_document_md(doc_md_file, create_new_index=False)
+    doc_file = "docs_md/Ex5Sol.md"
+    doc_success = index_content_file(doc_file, "document", create_new_index=False)
 
     if not doc_success:
         print("\n❌ Document indexing failed")
         return
+
 
 
 if __name__ == "__main__":
