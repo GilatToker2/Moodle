@@ -46,6 +46,7 @@ def extract_text_from_docx(file_path):
     except Exception as e:
         text = f"Error extracting text from DOCX: {str(e)}"
 
+
     return text
 
 def convert_text_to_markdown(text):

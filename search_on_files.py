@@ -1,6 +1,6 @@
 """
-Advanced Video Search - Advanced search system for video transcriptions
-Based on the index created with Index_transcription.py
+Advanced Document Search - Advanced search system for document chunks
+Based on the index created with Index_docs.py
 """
 import logging
 from typing import List, Dict, Optional, Tuple
@@ -20,13 +20,13 @@ from config import (
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class AdvancedVideoSearch:
+class AdvancedDocumentSearch:
     """
-    מערכת חיפוש מתקדמת לתמלולי וידאו
+    מערכת חיפוש מתקדמת למסמכים
     תומכת בחיפוש טקסטואלי, סמנטי ווקטורי
     """
 
-    def __init__(self, index_name: str = "video-chunks"):
+    def __init__(self, index_name: str = "document-chunks"):
         self.index_name = index_name
         self.search_endpoint = f"https://{SEARCH_SERVICE_NAME}.search.windows.net"
         self.credential = AzureKeyCredential(SEARCH_API_KEY)
@@ -45,10 +45,10 @@ class AdvancedVideoSearch:
             azure_endpoint=AZURE_OPENAI_ENDPOINT
         )
 
-        logger.info(f"AdvancedVideoSearch initialized with index: {self.index_name}")
+        logger.info(f"AdvancedDocumentSearch initialized with index: {self.index_name}")
+
     def check_index_status(self) -> Dict:
         """בדיקת מצב האינדקס והצגת מידע בסיסי"""
-        # logger.info("🔍 בדיקת מצב האינדקס")
         print("=" * 60)
 
         try:
@@ -74,10 +74,10 @@ class AdvancedVideoSearch:
                 for i, doc in enumerate(docs[:2], 1):
                     print(f"\n📄 מסמך {i}:")
                     print(f"  🆔 ID: {doc.get('id', 'N/A')}")
-                    print(f"  🎬 Video ID: {doc.get('video_id', 'N/A')}")
-                    print(f"  📝 Video Name: {doc.get('video_name', 'N/A')}")
-                    print(f"  ⏰ Start Time: {doc.get('start_time', 'N/A')}")
-                    print(f"  ⏱️ Start Seconds: {doc.get('start_seconds', 'N/A')}")
+                    print(f"  📄 Document ID: {doc.get('document_id', 'N/A')}")
+                    print(f"  📝 Document Name: {doc.get('document_name', 'N/A')}")
+                    print(f"  📑 Chunk Index: {doc.get('chunk_index', 'N/A')}")
+                    print(f"  📋 Section Title: {doc.get('section_title', 'N/A')}")
 
                     # הצגת תוכן הטקסט
                     text = doc.get('text', '')
@@ -123,15 +123,14 @@ class AdvancedVideoSearch:
 
     def simple_text_search(self, query: str, top_k: int = 5) -> List[Dict]:
         """חיפוש טקסטואלי פשוט במידה ולא ניתן לחלץ embedding"""
-        # logger.info(f"🔍 חיפוש טקסטואלי: '{query}'")
         print("=" * 60)
 
         try:
             results = self.search_client.search(
                 search_text=query,
                 select=[
-                    "id", "video_id", "video_name", "start_time", "start_seconds",
-                    "text", "created_date"
+                    "id", "document_id", "document_name", "chunk_index", "section_title",
+                    "text", "document_type", "created_date"
                 ],
                 top=top_k,
                 include_total_count=True
@@ -149,8 +148,11 @@ class AdvancedVideoSearch:
             for i, doc in enumerate(docs, 1):
                 score = doc.get('@search.score', 0)
                 print(f"\n📄 תוצאה {i} (ציון: {score:.3f}):")
-                print(f"  🎬 וידאו: {doc.get('video_name', 'לא זמין')} (ID: {doc.get('video_id', 'N/A')})")
-                print(f"  ⏰ זמן: {doc.get('start_time', 'N/A')} ({doc.get('start_seconds', 0):.1f}s)")
+                print(f"  📄 מסמך: {doc.get('document_name', 'לא זמין')} (ID: {doc.get('document_id', 'N/A')})")
+                print(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
+                section_title = doc.get('section_title', '')
+                if section_title:
+                    print(f"  📋 כותרת: {section_title}")
 
                 text = doc.get('text', '')
                 if text:
@@ -181,7 +183,6 @@ class AdvancedVideoSearch:
 
     def hybrid_search(self, query: str, top_k: int = 5) -> List[Dict]:
         """חיפוש היברידי - משלב טקסט ווקטור"""
-        # logger.info(f"🔍 חיפוש היברידי: '{query}'")
         print("=" * 60)
 
         try:
@@ -200,8 +201,8 @@ class AdvancedVideoSearch:
                     fields="vector"
                 )],
                 select=[
-                    "id", "video_id", "video_name", "start_time", "start_seconds",
-                    "text", "created_date"
+                    "id", "document_id", "document_name", "chunk_index", "section_title",
+                    "text", "document_type", "created_date"
                 ],
                 top=50,  # Get more results for better blending, then slice client-side
                 include_total_count=True
@@ -222,8 +223,11 @@ class AdvancedVideoSearch:
             for i, doc in enumerate(docs, 1):
                 score = doc.get('@search.score', 0)
                 print(f"\n📄 תוצאה {i} (ציון משולב: {score:.3f}):")
-                print(f"  🎬 וידאו: {doc.get('video_name', 'לא זמין')} (ID: {doc.get('video_id', 'N/A')})")
-                print(f"  ⏰ זמן: {doc.get('start_time', 'N/A')} ({doc.get('start_seconds', 0):.1f}s)")
+                print(f"  📄 מסמך: {doc.get('document_name', 'לא זמין')} (ID: {doc.get('document_id', 'N/A')})")
+                print(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
+                section_title = doc.get('section_title', '')
+                if section_title:
+                    print(f"  📋 כותרת: {section_title}")
 
                 text = doc.get('text', '')
                 if text:
@@ -239,7 +243,7 @@ class AdvancedVideoSearch:
             logger.error(f"Error in hybrid search: {e}")
             return []
 
-    def semantic_search(self, query: str, top_k: int = 5, video_id: str = None) -> List[Dict]:
+    def semantic_search(self, query: str, top_k: int = 5, document_id: str = None) -> List[Dict]:
         """חיפוש סמנטי מתקדם"""
         print("=" * 60)
 
@@ -263,16 +267,16 @@ class AdvancedVideoSearch:
                     fields="vector"
                 )],
                 "select": [
-                    "id", "video_id", "video_name", "start_time", "start_seconds",
-                    "text", "created_date"
+                    "id", "document_id", "document_name", "chunk_index", "section_title",
+                    "text", "document_type", "created_date"
                 ],
                 "top": top_k
             }
 
             # הוספת פילטר אם נדרש
-            if video_id:
-                escaped_video_id = video_id.replace("'", "''")
-                search_params["filter"] = f"video_id eq '{escaped_video_id}'"
+            if document_id:
+                escaped_document_id = document_id.replace("'", "''")
+                search_params["filter"] = f"document_id eq '{escaped_document_id}'"
 
             # חיפוש סמנטי מתקדם
             results = self.search_client.search(**search_params)
@@ -288,8 +292,11 @@ class AdvancedVideoSearch:
             for i, doc in enumerate(docs, 1):
                 score = doc.get('@search.score', 0)
                 print(f"\n📄 תוצאה {i} (ציון סמנטי: {score:.3f}):")
-                print(f"  🎬 וידאו: {doc.get('video_name', 'לא זמין')} (ID: {doc.get('video_id', 'N/A')})")
-                print(f"  ⏰ זמן: {doc.get('start_time', 'N/A')} ({doc.get('start_seconds', 0):.1f}s)")
+                print(f"  📄 מסמך: {doc.get('document_name', 'לא זמין')} (ID: {doc.get('document_id', 'N/A')})")
+                print(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
+                section_title = doc.get('section_title', '')
+                if section_title:
+                    print(f"  📋 כותרת: {section_title}")
 
                 text = doc.get('text', '')
                 if text:
@@ -306,7 +313,7 @@ class AdvancedVideoSearch:
             # Fallback to regular hybrid search
             return self.hybrid_search(query, top_k)
 
-    def search_best_answers(self, query: str, k: int = 5, video_id: str = None) -> List[Dict]:
+    def search_best_answers(self, query: str, k: int = 5, document_id: str = None) -> List[Dict]:
         """
         פונקציה פשוטה שמקבלת שאלה ומחזירה K התשובות הטובות ביותר
         משתמשת בחיפוש סמנטי כברירת מחדל, עם fallback להיברידי
@@ -315,11 +322,11 @@ class AdvancedVideoSearch:
         Args:
             query: השאלה לחיפוש
             k: מספר התוצאות הטובות ביותר להחזיר
-            video_id: אופציונלי - אם מוגדר, יחפש רק בוידאו הספציפי הזה
+            document_id: אופציונלי - אם מוגדר, יחפש רק במסמך הספציפי הזה
         """
         try:
             # שימוש בחיפוש סמנטי שהוא הכי חכם
-            results = self.semantic_search(query, k, video_id)
+            results = self.semantic_search(query, k, document_id)
             return results
         except Exception:
             # fallback להיברידי אם הסמנטי נכשל
@@ -327,69 +334,14 @@ class AdvancedVideoSearch:
             return results
 
 
-    # def get_video_summary(self, video_id: str) -> Dict:
-    #     """קבלת סיכום של וידאו ספציפי"""
-    #     # logger.info(f"📊 יצירת סיכום עבור Video ID: {video_id}")
-    #
-    #     try:
-    #         # קבלת כל הצ'אנקים של הוידאו
-    #         results = self.search_client.search(
-    #             search_text="*",
-    #             filter=f"video_id eq '{video_id}'",
-    #             select=["video_name", "start_seconds", "text", "created_date"],
-    #             order_by=["start_seconds asc"],
-    #             top=1000  # מספר גבוה לקבלת כל הצ'אנקים
-    #         )
-    #
-    #         docs = list(results)
-    #
-    #         if not docs:
-    #             return {"error": f"לא נמצא וידאו עם ID: {video_id}"}
-    #
-    #         # חישוב סטטיסטיקות
-    #         total_chunks = len(docs)
-    #         video_name = docs[0].get('video_name', 'לא זמין')
-    #         total_text_length = sum(len(doc.get('text', '')) for doc in docs)
-    #
-    #         # זמן כולל (משוער)
-    #         if docs:
-    #             max_time = max(doc.get('start_seconds', 0) for doc in docs)
-    #             duration_minutes = max_time / 60
-    #         else:
-    #             duration_minutes = 0
-    #
-    #         summary = {
-    #             "video_id": video_id,
-    #             "video_name": video_name,
-    #             "total_chunks": total_chunks,
-    #             "estimated_duration_minutes": round(duration_minutes, 2),
-    #             "total_text_characters": total_text_length,
-    #             "average_chunk_length": round(total_text_length / total_chunks) if total_chunks > 0 else 0,
-    #             "created_date": docs[0].get('created_date') if docs else None
-    #         }
-    #
-    #         print(f"📊 סיכום וידאו {video_id}:")
-    #         print(f"  📝 שם: {summary['video_name']}")
-    #         print(f"  📄 צ'אנקים: {summary['total_chunks']}")
-    #         print(f"  ⏱️ משך משוער: {summary['estimated_duration_minutes']} דקות")
-    #         print(f"  📏 אורך טקסט כולל: {summary['total_text_characters']} תווים")
-    #         print(f"  📊 אורך צ'אנק ממוצע: {summary['average_chunk_length']} תווים")
-    #
-    #         return summary
-    #
-    #     except Exception as e:
-    #         logger.error(f"Error creating video summary: {e}")
-    #         return {"error": str(e)}
-
-
 def run_search_demo():
     """הרצת דמו מלא של מערכת החיפוש"""
-    print("🎬 מערכת חיפוש מתקדמת לתמלולי וידאו")
+    print("📄 מערכת חיפוש מתקדמת למסמכים")
     print("=" * 80)
 
     try:
         # יצירת מערכת החיפוש
-        search_system = AdvancedVideoSearch("video-chunks")
+        search_system = AdvancedDocumentSearch("document-chunks")
 
         # בדיקת מצב האינדקס
         print("\n🔧 בדיקת מצב האינדקס:")
@@ -401,9 +353,9 @@ def run_search_demo():
 
         # שאלות לדוגמה
         demo_queries = [
-            "מה זה פסוק לוגי",
-            "מבוא ללוגיקה",
-            "טענה"
+            "מה זה טרנזטיביות",
+            "מתי יש שוויון בין מחלקות שקילות",
+            "איך אפשר לשלול ביטוי"
         ]
 
         print(f"\n🎯 הרצת דמו עם {len(demo_queries)} שאלות:")
@@ -438,28 +390,19 @@ def run_search_demo():
 
             print("\n" + "=" * 80)
 
-            # 4. חיפוש סמנטי בוידאו ספציפי
-            print("\n4️⃣ חיפוש סמנטי בוידאו ספציפי:")
+            # 4. חיפוש סמנטי במסמך ספציפי
+            print("\n4️⃣ חיפוש סמנטי במסמך ספציפי:")
             print("-" * 40)
-            sample_video_id = "ghz3r7c625"
-            print(f"🎯 חיפוש בוידאו: {sample_video_id}")
-            search_system.semantic_search(query, top_k=2, video_id=sample_video_id)
+            sample_document_id = "Ex5Sol"
+            print(f"🎯 חיפוש במסמך: {sample_document_id}")
+            search_system.semantic_search(query, top_k=2, document_id=sample_document_id)
 
             # הפסקה בין שאלות
             if i < len(demo_queries):
                 print("\n" + "🔄 עובר לשאלה הבאה..." + "\n")
 
-        # # סיכום הוידאו לדוגמה
-        # if status.get("sample_doc"):
-        #     sample_video_id = status["sample_doc"].get("video_id")
-        #     if sample_video_id:
-        #         print(f"\n{'='*80}")
-        #         print(f"📊 סיכום הוידאו לדוגמה")
-        #         print(f"{'='*80}")
-        #         search_system.get_video_summary(sample_video_id)
-
         print(f"\n🎉 דמו הושלם בהצלחה!")
-        print("💡 ניתן להשתמש במערכת עם שאלות נוספות או לחפש לפי Video ID ספציפי")
+        print("💡 ניתן להשתמש במערכת עם שאלות נוספות או לחפש לפי Document ID ספציפי")
 
     except Exception as e:
         print(f"❌ שגיאה בהרצת הדמו: {e}")
@@ -474,17 +417,17 @@ def main():
         run_search_demo()
 
         # יצירת מערכת החיפוש
-        search_system = AdvancedVideoSearch("video-chunks")
+        search_system = AdvancedDocumentSearch("document-chunks")
 
         # שאלה לדוגמה
-        query = "מה ההגדרה של יחס לוגי"
+        query = "מה ההגדרה של יחס שקילות"
 
         print(f"🔍 חיפוש עבור: '{query}'")
         print("=" * 60)
 
         # קריאה לפונקציה החדשה
-        results = search_system.search_best_answers(query, k=5 )
-        # results = search_system.search_best_answers(query, k=5, video_id= "ghz3r7c625" )
+        results = search_system.search_best_answers(query, k=5)
+        # results = search_system.search_best_answers(query, k=5, document_id="Ex5Sol")
 
         if not results:
             print("❌ לא נמצאו תוצאות")
@@ -496,8 +439,11 @@ def main():
         for i, doc in enumerate(results, 1):
             score = doc.get('@search.score', 0)
             print(f"\n🏆 תשובה {i} (ציון: {score:.3f}):")
-            print(f"  📹 וידאו: {doc.get('video_name', 'לא זמין')}")
-            print(f"  ⏰ זמן: {doc.get('start_time', 'N/A')}")
+            print(f"  📄 מסמך: {doc.get('document_name', 'לא זמין')}")
+            print(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
+            section_title = doc.get('section_title', '')
+            if section_title:
+                print(f"  📋 כותרת: {section_title}")
 
             text = doc.get('text', '')
             if text:
