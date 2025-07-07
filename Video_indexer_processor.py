@@ -2,9 +2,28 @@ import requests
 import time
 import os
 import json
+import subprocess
 from datetime import datetime
 from typing import Optional, Dict, List
-from config import VIDEO_INDEXER_TOKEN, VIDEO_INDEXER_ACCOUNT_ID, VIDEO_INDEXER_LOCATION
+from config import VIDEO_INDEXER_ACCOUNT_ID, VIDEO_INDEXER_LOCATION
+
+# Azure subscription and resource group details for token generation
+SUB_ID = "71d6ab4d-a2ae-4612-b630-7bda563937fe"
+RG = "moodle"
+VI_ACC = "video-indexer-moodle"  # ARM name for token generation
+
+def vi_token():
+    """Generate a new Video Indexer access token using Azure CLI."""
+    cmd = [
+        r"C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd",
+        "rest", "--method", "post",
+        "--uri", f"https://management.azure.com/subscriptions/{SUB_ID}"
+                f"/resourceGroups/{RG}/providers/Microsoft.VideoIndexer/accounts/{VI_ACC}"
+                f"/generateAccessToken?api-version=2024-01-01",
+        "--body", '{"permissionType":"Contributor","scope":"Account"}',
+        "--query", "accessToken", "-o", "tsv"
+    ]
+    return subprocess.check_output(cmd, text=True).strip()
 
 
 class VideoIndexerManager:
@@ -13,12 +32,37 @@ class VideoIndexerManager:
 
     This class provides methods to upload videos, extract transcripts,
     keywords, topics, OCR text, and generate comprehensive markdown reports.
+
+    Features automatic token refresh - no need to manually update tokens!
     """
+
     def __init__(self):
-        self.token = VIDEO_INDEXER_TOKEN
+        self.token = vi_token()  # Get fresh token automatically
+        self.token_time = time.time()
         self.account_id = VIDEO_INDEXER_ACCOUNT_ID
         self.location = VIDEO_INDEXER_LOCATION
         self.supported_formats = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv']
+
+    def _refresh_if_needed(self):
+        """Refresh the access token if it's about to expire (55 minutes)."""
+        if time.time() - self.token_time > 55 * 60:  # ~55 min
+            print("🔄 מרענן טוקן Video Indexer...")
+            self.token = vi_token()
+            self.token_time = time.time()
+            print("✅ טוקן חודש בהצלחה!")
+
+    def _get_url_with_token(self, path):
+        """Build API URL with current access token, refreshing if needed."""
+        self._refresh_if_needed()
+        return f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}{path}"
+
+    def _get_params_with_token(self, additional_params=None):
+        """Get request parameters with current access token."""
+        self._refresh_if_needed()
+        params = {"accessToken": self.token}
+        if additional_params:
+            params.update(additional_params)
+        return params
 
     def upload_video(self, video_path: str, video_name: Optional[str] = None) -> str:
         """
@@ -58,12 +102,11 @@ class VideoIndexerManager:
             try:
                 with open(video_path, 'rb') as f:
                     files = {'file': (os.path.basename(video_path), f, 'video/mp4')}
-                    params = {
+                    params = self._get_params_with_token({
                         "name": video_name,
                         "privacy": "Private",
-                        "language": "he-IL",
-                        "accessToken": self.token
-                    }
+                        "language": "he-IL"
+                    })
 
                     print(f"  ⏳ מעלה קובץ... (נסיון {attempt + 1}/{max_retries})")
                     resp = requests.post(url, files=files, params=params, timeout=300)  # 5 דקות timeout
@@ -93,13 +136,13 @@ class VideoIndexerManager:
         print(f"⏳ ממתין לסיום עיבוד הוידאו {video_id}...")
 
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Index"
-        params = {"accessToken": self.token}
 
         start_time = time.time()
         max_wait_seconds = max_wait_minutes * 60
 
         while True:
             try:
+                params = self._get_params_with_token()
                 resp = requests.get(url, params=params)
                 resp.raise_for_status()
                 data = resp.json()
@@ -160,6 +203,67 @@ class VideoIndexerManager:
                 transcript_segments.append(segment)
 
         return transcript_segments
+
+    def merge_segments_by_duration(self, segments: List[Dict], max_duration_seconds: int = 30) -> List[Dict]:
+        """
+        איגוד סגמנטים לסגמנטים ארוכים יותר על פי פרמטר זמן מקסימלי
+
+        Args:
+            segments: רשימת סגמנטים מקוריים
+            max_duration_seconds: משך זמן מקסימלי בשניות לכל סגמנט מאוחד
+
+        Returns:
+            רשימת סגמנטים מאוחדים
+        """
+        if not segments:
+            return []
+
+        merged_segments = []
+        current_segment = None
+
+        for segment in segments:
+            if current_segment is None:
+                # התחלת סגמנט חדש
+                current_segment = {
+                    "text": segment["text"],
+                    "start_time": segment["start_time"],
+                    "end_time": segment["end_time"],
+                    "start_seconds": segment["start_seconds"],
+                    "end_seconds": segment["end_seconds"],
+                    "duration": segment["duration"],
+                    "confidence": segment["confidence"]
+                }
+            else:
+                # בדיקה אם ניתן לאחד עם הסגמנט הנוכחי
+                potential_duration = segment["end_seconds"] - current_segment["start_seconds"]
+
+                if potential_duration <= max_duration_seconds:
+                    # איחוד הסגמנטים
+                    current_segment["text"] += " " + segment["text"]
+                    current_segment["end_time"] = segment["end_time"]
+                    current_segment["end_seconds"] = segment["end_seconds"]
+                    current_segment["duration"] = current_segment["end_seconds"] - current_segment["start_seconds"]
+                    # ממוצע של רמת הביטחון
+                    current_segment["confidence"] = (current_segment["confidence"] + segment["confidence"]) / 2
+                else:
+                    # הסגמנט הנוכחי מלא, נוסיף אותו לרשימה ונתחיל חדש
+                    merged_segments.append(current_segment)
+                    current_segment = {
+                        "text": segment["text"],
+                        "start_time": segment["start_time"],
+                        "end_time": segment["end_time"],
+                        "start_seconds": segment["start_seconds"],
+                        "end_seconds": segment["end_seconds"],
+                        "duration": segment["duration"],
+                        "confidence": segment["confidence"]
+                    }
+
+        # הוספת הסגמנט האחרון
+        if current_segment is not None:
+            merged_segments.append(current_segment)
+
+        print(f"  🔗 איחוד סגמנטים: {len(segments)} → {len(merged_segments)} (מקס {max_duration_seconds} שניות)")
+        return merged_segments
 
     def extract_video_metadata(self, index_json: Dict) -> Dict:
         """חילוץ מטא-דאטה מלא מהוידאו"""
@@ -256,19 +360,19 @@ class VideoIndexerManager:
         Returns the summaryId for polling.
         """
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Summaries/Textual"
-        params = {
+        params = self._get_params_with_token({
             "deploymentName": deployment_name,
             "length": length,  # short | medium | long
             "style": style,  # neutral | casual | formal
             "includedFrames": included_frames,  # None | Keyframes
-            "accessToken": self.token,
             "addToEndOfSummaryInstructions": "Compose an in-depth, chronological summary of the lecture in 1 000–1 500 words. \
             Present the material in the exact order it was taught. For every major topic, \
             (1) give clear definitions of new terms or concepts, and (2) state the key takeaway \
             in one sentence. Write in a pedagogical tone so a student can master the lesson \
             from this summary alone. Conclude with a bulleted list of concrete action items \
-            or study recommendations for the students."
-        }
+            or study recommendations for the students. \
+            At the very end, add a single line with ONLY one word: either 'מתמטי' or 'הומני' to classify if this is a mathematical/technical course or humanities course."
+        })
 
         try:
             resp = requests.post(url, params=params, timeout=30)
@@ -294,10 +398,9 @@ class VideoIndexerManager:
         Poll the summary job until it's ready, then return the generated summary text.
         """
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Summaries/Textual/{summary_id}"
-        params = {
-            "accessToken": self.token
-        }
+
         while True:
+            params = self._get_params_with_token()
             resp = requests.get(url, params=params, timeout=15)
             resp.raise_for_status()
             data = resp.json()
@@ -333,34 +436,34 @@ class VideoIndexerManager:
         minutes = (seconds % 3600) // 60
         secs = seconds % 60
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    #
+    # def _save_summary_to_file(self, video_id: str, summary_text: str, video_name: str) -> str:
+    #     """שמירת הסיכום כקובץ MD נפרד בתיקיית video_summary"""
+    #     # יצירת תיקיית video_summary אם לא קיימת
+    #     summary_dir = "video_summary"
+    #     os.makedirs(summary_dir, exist_ok=True)
+    #
+    #     # יצירת שם קובץ בטוח
+    #     safe_video_name = "".join(c for c in video_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    #     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    #     summary_filename = f"{safe_video_name}_{video_id}_{timestamp}_summary.md"
+    #     summary_path = os.path.join(summary_dir, summary_filename)
+    #
+    #     # יצירת תוכן הקובץ
+    #     summary_content = f"# סיכום וידאו: {video_name}\n\n"
+    #     summary_content += f"**Video ID**: {video_id}\n"
+    #     summary_content += f"**תאריך יצירה**: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n\n"
+    #     summary_content += "## סיכום\n\n"
+    #     summary_content += summary_text
+    #
+    #     # שמירת הקובץ
+    #     with open(summary_path, "w", encoding="utf-8") as f:
+    #         f.write(summary_content)
+    #
+    #     print(f"  ✅ הסיכום נשמר בקובץ: {summary_path}")
+    #     return summary_path
 
-    def _save_summary_to_file(self, video_id: str, summary_text: str, video_name: str) -> str:
-        """שמירת הסיכום כקובץ MD נפרד בתיקיית video_summary"""
-        # יצירת תיקיית video_summary אם לא קיימת
-        summary_dir = "video_summary"
-        os.makedirs(summary_dir, exist_ok=True)
-
-        # יצירת שם קובץ בטוח
-        safe_video_name = "".join(c for c in video_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        summary_filename = f"{safe_video_name}_{video_id}_{timestamp}_summary.md"
-        summary_path = os.path.join(summary_dir, summary_filename)
-
-        # יצירת תוכן הקובץ
-        summary_content = f"# סיכום וידאו: {video_name}\n\n"
-        summary_content += f"**Video ID**: {video_id}\n"
-        summary_content += f"**תאריך יצירה**: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n\n"
-        summary_content += "## סיכום\n\n"
-        summary_content += summary_text
-
-        # שמירת הקובץ
-        with open(summary_path, "w", encoding="utf-8") as f:
-            f.write(summary_content)
-
-        print(f"  ✅ הסיכום נשמר בקובץ: {summary_path}")
-        return summary_path
-
-    def process_video_complete(self, video_path: str, video_name: Optional[str] = None) -> Dict:
+    def process_video_complete(self, video_path: str, video_name: Optional[str] = None, merge_segments_duration: Optional[int] = None) -> Dict:
         """עיבוד מלא של וידאו - העלאה, המתנה לעיבוד וחילוץ נתונים"""
         print(f"\n🎬 מתחיל עיבוד מלא של: {os.path.basename(video_path)}")
 
@@ -382,21 +485,27 @@ class VideoIndexerManager:
             print("  📝 מחלץ טרנסקריפט...")
             transcript_segments = self.extract_transcript_with_timestamps(index_data)
 
+            # שלב 3.5: איחוד סגמנטים אם נדרש
+            if merge_segments_duration:
+                print(f"  🔗 מאחד סגמנטים למקסימום {merge_segments_duration} שניות...")
+                transcript_segments = self.merge_segments_by_duration(transcript_segments, merge_segments_duration)
+
             # שלב 4: חילוץ מטא-דאטה
             print("  📊 מחלץ מטא-דאטה...")
             metadata = self.extract_video_metadata(index_data)
+            #
+            # # 🟢 שמירת הסיכום כקובץ MD נפרד
+            # self._save_summary_to_file(video_id, summary_text, metadata.get('name', 'Unknown Video'))
 
-            # 🟢 שמירת הסיכום כקובץ MD נפרד
-            self._save_summary_to_file(video_id, summary_text, metadata.get('name', 'Unknown Video'))
-
-            # שלב 5: יצירת מבנה נתונים מובנה (ללא הסיכום במטאדאטה)
+            # שלב 5: יצירת מבנה נתונים מובנה (עם הסיכום)
             structured_data = {
                 "id": video_id,
                 **metadata,
                 "transcript_segments": transcript_segments,
                 "full_transcript": " ".join([seg["text"] for seg in transcript_segments]),
                 "segment_start_times": [seg["start_time"] for seg in transcript_segments],
-                "segment_start_seconds": [seg["start_seconds"] for seg in transcript_segments]
+                "segment_start_seconds": [seg["start_seconds"] for seg in transcript_segments],
+                "summary_text": summary_text  # הוספת הסיכום לנתונים המובנים
             }
 
             print(f"  ✅ עיבוד הושלם בהצלחה!")
@@ -408,7 +517,8 @@ class VideoIndexerManager:
             print(f"  ❌ שגיאה בעיבוד הוידאו: {str(e)}")
             raise
 
-    def process_video_from_path(self, video_path: str) -> str:
+
+    def process_video_from_path(self, video_path: str, merge_segments_duration: Optional[int] = None) -> Dict:
         """פונקציה נוחה לעיבוד וידאו מנתיב קובץ"""
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"קובץ הוידאו לא נמצא: {video_path}")
@@ -418,11 +528,11 @@ class VideoIndexerManager:
         video_name = os.path.splitext(video_filename)[0]
 
         # עיבוד הוידאו
-        structured_data = self.process_video_complete(video_path, video_name)
+        structured_data = self.process_video_complete(video_path, video_name, merge_segments_duration)
 
-        return structured_data["video_id"]
+        return structured_data
 
-    def parse_insights_to_md(self, structured_data: Dict) -> str:
+    def parse_insights_to_md(self, structured_data: Dict, summary_text: str = "") -> str:
         """המרת נתוני הוידאו לפורמט Markdown מתקדם"""
         md_content = []
 
@@ -463,6 +573,28 @@ class VideoIndexerManager:
             md_content.append("## 👁️ OCR - Text Extracted from Video")
             for i, ocr_text in enumerate(ocr_texts, 1):
                 md_content.append(f"{i}. {ocr_text}")
+            md_content.append("")
+
+        # סיכום - אחרי OCR ולפני Full Transcript
+        if summary_text:
+            # חילוץ סוג המקצוע מהסיכום
+            subject_type = "לא זוהה"
+            summary_lines = summary_text.strip().split('\n')
+            last_line = summary_lines[-1].strip() if summary_lines else ""
+
+            if last_line in ['מתמטי', 'הומני']:
+                subject_type = last_line
+                # הסרת השורה האחרונה מהסיכום
+                summary_text = '\n'.join(summary_lines[:-1]).strip()
+
+            # הוספת סוג המקצוע
+            md_content.append(f"## 🎓 סוג מקצוע")
+            md_content.append(subject_type)
+            md_content.append("")
+
+            # הוספת הסיכום
+            md_content.append("## 📝 סיכום השיעור")
+            md_content.append(summary_text)
             md_content.append("")
 
         # תיאור אם קיים
@@ -522,10 +654,10 @@ def process_video_to_md(file_path: str) -> str:
     transcript_segments = manager.extract_transcript_with_timestamps(index_data)
     metadata = manager.extract_video_metadata(index_data)
 
-    # 🟢 שמירת הסיכום כקובץ MD נפרד
-    manager._save_summary_to_file(video_id, summary_text, metadata.get('name', 'Unknown Video'))
+    # # 🟢 שמירת הסיכום כקובץ MD נפרד
+    # manager._save_summary_to_file(video_id, summary_text, metadata.get('name', 'Unknown Video'))
 
-    # Create structured data (ללא הסיכום במטאדאטה)
+    # Create structured data (עם הסיכום)
     structured_data = {
         "id": video_id,
         **metadata,
@@ -535,28 +667,38 @@ def process_video_to_md(file_path: str) -> str:
         "segment_start_seconds": [seg["start_seconds"] for seg in transcript_segments]
     }
 
-    # Convert to markdown
-    md_string = manager.parse_insights_to_md(structured_data)
+    # Convert to markdown with summary
+    md_string = manager.parse_insights_to_md(structured_data, summary_text)
+
 
     return md_string
 
-def test_video_processing(video_path: str):
-    """בדיקת עיבוד וידאו פשוטה"""
-    print(f"🎬 מעבד וידאו: {video_path}")
 
-    manager = VideoIndexerManager()
-    video_id = manager.process_video_from_path(video_path)
+def process_video_from_path(self, video_path: str) -> Dict:
+    """פונקציה נוחה לעיבוד וידאו מנתיב קובץ"""
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(f"קובץ הוידאו לא נמצא: {video_path}")
 
-    print(f"✅ הושלם! מזהה: {video_id}")
-    return video_id
+    # יצירת שם וידאו מהקובץ
+    video_filename = os.path.basename(video_path)
+    video_name = os.path.splitext(video_filename)[0]
 
+    # עיבוד הוידאו
+    structured_data = self.process_video_complete(video_path, video_name)
+
+    return structured_data
 
 if __name__ == "__main__":
     # Example usage with local video file
-    video_file_path = r"Lectures\L9_18f0d24bb7e45223abf842cdc1274de65fc7d620 - Trim.mp4"
+    video_file_path = r"Lectures\L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4"
 
     try:
-        md = process_video_to_md(video_file_path)
+        # Process video with segment merging (30 seconds max per segment)
+        manager = VideoIndexerManager()
+        structured_data = manager.process_video_from_path(video_file_path, merge_segments_duration=15)
+
+        # Generate markdown with merged segments
+        md = manager.parse_insights_to_md(structured_data, structured_data.get('summary_text', ''))
 
         # Create Videos_MD directory if it doesn't exist
         os.makedirs("Videos_MD", exist_ok=True)
@@ -564,12 +706,14 @@ if __name__ == "__main__":
         # Generate output filename based on video filename
         video_filename = os.path.basename(video_file_path)
         video_name_without_ext = os.path.splitext(video_filename)[0]
-        output_filename = f"{video_name_without_ext}.md"
+        output_filename = f"{video_name_without_ext}_merged_30s.md"
         output_path = os.path.join("Videos_MD", output_filename)
 
         # Save to file
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(md)
-        print(f"✅ Video processed successfully! Output saved to {output_path}")
+        print(f"✅ Video processed successfully with 30s segment merging!")
+        print(f"📄 Output saved to {output_path}")
+        print(f"📊 Total segments after merging: {len(structured_data['transcript_segments'])}")
     except Exception as e:
         print(f"❌ Error processing video: {e}")
