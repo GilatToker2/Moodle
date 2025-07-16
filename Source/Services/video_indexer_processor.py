@@ -4,23 +4,9 @@ import os
 import subprocess
 from datetime import datetime
 from typing import Optional, Dict, List
-from Config.config import VIDEO_INDEXER_ACCOUNT_ID, VIDEO_INDEXER_LOCATION, VIDEO_INDEXER_SUB_ID, VIDEO_INDEXER_RG, \
-    VIDEO_INDEXER_VI_ACC
+from Config.config import VIDEO_INDEXER_ACCOUNT_ID, VIDEO_INDEXER_LOCATION, VIDEO_INDEXER_TOKEN
 from Source.Services.blob_manager import BlobManager
 
-
-def vi_token():
-    """יצירת טוקן גישה חדש ל-Video Indexer באמצעות Azure CLI."""
-    cmd = [
-        r"C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd",
-        "rest", "--method", "post",
-        "--uri", f"https://management.azure.com/subscriptions/{VIDEO_INDEXER_SUB_ID}"
-                 f"/resourceGroups/{VIDEO_INDEXER_RG}/providers/Microsoft.VideoIndexer/accounts/{VIDEO_INDEXER_VI_ACC}"
-                 f"/generateAccessToken?api-version=2024-01-01",
-        "--body", '{"permissionType":"Contributor","scope":"Account"}',
-        "--query", "accessToken", "-o", "tsv"
-    ]
-    return subprocess.check_output(cmd, text=True).strip()
 
 
 class VideoIndexerManager:
@@ -30,23 +16,13 @@ class VideoIndexerManager:
     """
 
     def __init__(self):
-        self.token = vi_token()
-        self.token_time = time.time()
+        self.token = VIDEO_INDEXER_TOKEN
         self.account_id = VIDEO_INDEXER_ACCOUNT_ID
         self.location = VIDEO_INDEXER_LOCATION
         self.supported_formats = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv']
 
-    def _refresh_if_needed(self):
-        """רענון טוקן הגישה אם הוא עומד לפוג (55 דקות)."""
-        if time.time() - self.token_time > 55 * 60:
-            print("🔄 מרענן טוקן Video Indexer...")
-            self.token = vi_token()
-            self.token_time = time.time()
-            print("✅ טוקן חודש בהצלחה!")
-
     def _get_params_with_token(self, additional_params=None):
-        """קבלת פרמטרים עם טוקן גישה נוכחי."""
-        self._refresh_if_needed()
+        """קבלת פרמטרים עם טוקן גישה."""
         params = {"accessToken": self.token}
         if additional_params:
             params.update(additional_params)
