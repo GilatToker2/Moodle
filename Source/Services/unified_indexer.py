@@ -337,9 +337,9 @@ def _detect_content_type_from_path(blob_path: str) -> str:
     זיהוי סוג התוכן לפי נתיב הקובץ
     מחזיר 'video' אם הנתיב מכיל 'Videos_md' או 'document' אם מכיל 'Docs_md'
     """
-    if "Videos_md" in blob_path.lower():
+    if "videos_md" in blob_path.lower():
         return "video"
-    elif "Docs_md" in blob_path.lower():
+    elif "docs_md" in blob_path.lower():
         return "document"
     else:
         # ברירת מחדל - ננסה לזהות לפי סיומת
@@ -540,6 +540,7 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
             print(f"  📋 זוהה כסוג: {content_type}")
 
             if content_type == "video":
+                print(f'content type: {content_type}')
                 # עיבוד קובץ וידאו
                 video_data = parse_video_md_from_blob(blob_path, blob_manager)
                 segments = video_data.get("transcript_segments", [])
@@ -678,7 +679,7 @@ def main():
     # Define blob paths to process - type will be auto-detected from path
     blob_paths = [
         "CS101/Section1/Videos_md/2.md",
-        "CS101/Section1/Docs_md/1.md",
+        # "CS101/Section1/Docs_md/1.md",
     ]
 
     result = index_content_files(blob_paths, create_new_index=True)

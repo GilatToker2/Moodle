@@ -232,7 +232,8 @@ async def process_video_file(
     tags=["Indexing"]
 )
 async def index_content_files_endpoint(
-        blob_paths: List[str] = Form(..., description="List of blob paths to MD files (e.g., ['CS101/Section1/Videos_md/2.md','CS101/Section1/Docs_md/1.md'])"),
+        blob_paths: str = Form(...,
+                               description="Comma-separated list of blob paths to MD files (e.g., 'CS101/Section1/Videos_md/2.md,CS101/Section1/Docs_md/1.md')"),
         create_new_index: bool = Form(False, description="Create new index? (default: False)")
 ):
     """
@@ -256,25 +257,31 @@ async def index_content_files_endpoint(
     • Adds to Azure Search index
 
     **File Examples:**
-    - **Document**: "CS101/Section1/Docs_md/1.md"
-    - **Video**: "CS101/Section1/Videos_md/2.md"
+    - **Document**: "CS101/Section1/Docs_md/bdida_tirgul_02.md"
+    - **Video**: "CS101/Section1/Videos_md/L1_091004f349688522f773afc884451c9af6da18fb_Trim.md"
 
     **Returns:**
     - message: Result message from the indexing operation
     - create_new_index: Boolean indicating whether a new index was created
     """
     try:
-        # Validate blob paths
-        if not blob_paths or not isinstance(blob_paths, list):
-            raise HTTPException(status_code=400, detail="Blob paths must be a non-empty list")
+        # Parse comma-separated blob paths into a list
+        if not blob_paths or not blob_paths.strip():
+            raise HTTPException(status_code=400, detail="Blob paths cannot be empty")
+
+        # Split by comma and clean up whitespace
+        blob_paths_list = [path.strip() for path in blob_paths.split(',') if path.strip()]
+
+        if not blob_paths_list:
+            raise HTTPException(status_code=400, detail="No valid blob paths provided")
 
         # Check all files are MD
-        for blob_path in blob_paths:
+        for blob_path in blob_paths_list:
             if not blob_path.lower().endswith('.md'):
                 raise HTTPException(status_code=400, detail=f"Only MD files are supported: {blob_path}")
 
         # Use the unified_indexer to process files from blob storage
-        result = index_content_files(blob_paths, create_new_index=create_new_index)
+        result = index_content_files(blob_paths_list, create_new_index=create_new_index)
 
         return {
             "message": result,
@@ -282,7 +289,6 @@ async def index_content_files_endpoint(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error indexing files: {str(e)}")
-
 
 
 # ================================
