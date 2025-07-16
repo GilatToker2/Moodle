@@ -4,9 +4,9 @@ import os
 import subprocess
 from datetime import datetime
 from typing import Optional, Dict, List
-from Config.Config import VIDEO_INDEXER_ACCOUNT_ID, VIDEO_INDEXER_LOCATION, VIDEO_INDEXER_SUB_ID, VIDEO_INDEXER_RG, \
+from Config.config import VIDEO_INDEXER_ACCOUNT_ID, VIDEO_INDEXER_LOCATION, VIDEO_INDEXER_SUB_ID, VIDEO_INDEXER_RG, \
     VIDEO_INDEXER_VI_ACC
-from Source.Services.Blob_manager import BlobManager
+from Source.Services.blob_manager import BlobManager
 
 
 def vi_token():

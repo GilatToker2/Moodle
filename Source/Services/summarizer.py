@@ -7,14 +7,14 @@ import os
 import traceback
 from typing import Dict
 from openai import AzureOpenAI
-from Config.Config import (
+from Config.config import (
     AZURE_OPENAI_API_KEY,
     AZURE_OPENAI_ENDPOINT,
     AZURE_OPENAI_API_VERSION,
     AZURE_OPENAI_CHAT_COMPLETION_MODEL,
     CONTAINER_NAME
 )
-from Source.Services.Blob_manager import BlobManager
+from Source.Services.blob_manager import BlobManager
 
 
 class ContentSummarizer:
@@ -402,11 +402,11 @@ class ContentSummarizer:
     def _detect_content_type_from_path(self, blob_path: str) -> str:
         """
         זיהוי סוג התוכן לפי נתיב הקובץ
-        מחזיר 'video' אם הנתיב מכיל 'videos_md' או 'document' אם מכיל 'docs_md'
+        מחזיר 'video' אם הנתיב מכיל 'Videos_md' או 'document' אם מכיל 'Docs_md'
         """
-        if "videos_md" in blob_path.lower():
+        if "Videos_md" in blob_path.lower():
             return "video"
-        elif "docs_md" in blob_path.lower():
+        elif "Docs_md" in blob_path.lower():
             return "document"
         else:
             # ברירת מחדל - ננסה לזהות לפי סיומת

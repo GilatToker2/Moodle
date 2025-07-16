@@ -11,7 +11,7 @@ from azure.search.documents.models import VectorizedQuery
 from openai import AzureOpenAI
 import traceback
 
-from Config.Config import (
+from Config.config import (
     SEARCH_SERVICE_NAME, SEARCH_API_KEY,
     AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_VERSION,
     AZURE_OPENAI_EMBEDDING_MODEL, INDEX_NAME

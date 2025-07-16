@@ -26,8 +26,8 @@ from azure.search.documents.indexes.models import HnswAlgorithmConfiguration
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
 from azure.core.exceptions import ResourceNotFoundError
-from Source.Services.Blob_manager import BlobManager
-from Config.Config import (
+from Source.Services.blob_manager import BlobManager
+from Config.config import (
     SEARCH_SERVICE_NAME, SEARCH_API_KEY,
     AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_EMBEDDING_MODEL,
     INDEX_NAME
@@ -335,11 +335,11 @@ class UnifiedContentIndexer:
 def _detect_content_type_from_path(blob_path: str) -> str:
     """
     זיהוי סוג התוכן לפי נתיב הקובץ
-    מחזיר 'video' אם הנתיב מכיל 'videos_md' או 'document' אם מכיל 'docs_md'
+    מחזיר 'video' אם הנתיב מכיל 'Videos_md' או 'document' אם מכיל 'Docs_md'
     """
-    if "videos_md" in blob_path.lower():
+    if "Videos_md" in blob_path.lower():
         return "video"
-    elif "docs_md" in blob_path.lower():
+    elif "Docs_md" in blob_path.lower():
         return "document"
     else:
         # ברירת מחדל - ננסה לזהות לפי סיומת
@@ -511,7 +511,7 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
     מזהה אוטומטית את סוג הקובץ (וידאו/מסמך) לפי ה-path.
 
     Args:
-        blob_paths: רשימת נתיבי blob של קבצי MD (למשל: ["videos_md/video.md", "docs_md/doc.md"])
+        blob_paths: רשימת נתיבי blob של קבצי MD (למשל: ["Videos_md/video.md", "Docs_md/doc.md"])
         create_new_index: האם ליצור אינדקס חדש (True) או להוסיף לאינדקס קיים (False)
 
     Returns:

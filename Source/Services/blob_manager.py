@@ -8,7 +8,7 @@ import os
 from typing import Optional, List
 from datetime import datetime, timedelta
 from azure.storage.blob import BlobServiceClient, ContentSettings, generate_blob_sas, BlobSasPermissions
-from Config.Config import STORAGE_CONNECTION_STRING, CONTAINER_NAME
+from Config.config import STORAGE_CONNECTION_STRING, CONTAINER_NAME
 import traceback
 
 

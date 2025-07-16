@@ -19,10 +19,10 @@ import os
 import uvicorn
 
 # Import modules
-from Source.Services.Files_DocAI_processor import document_to_markdown
-from Source.Services.Summarizer import ContentSummarizer
-from Source.Services.Video_indexer_processor import VideoIndexerManager
-from Source.Services.Unified_indexer import index_content_files
+from Source.Services.files_DocAI_processor import document_to_markdown
+from Source.Services.summarizer import ContentSummarizer
+from Source.Services.video_indexer_processor import VideoIndexerManager
+from Source.Services.unified_indexer import index_content_files
 
 # Initialize FastAPI app
 app = FastAPI(title="Academic Content API", version="1.0.0")

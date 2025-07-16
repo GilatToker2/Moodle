@@ -2,7 +2,7 @@ import os
 from io import BytesIO
 from azure.core.credentials import AzureKeyCredential
 from azure.ai.documentintelligence import DocumentIntelligenceClient
-from Source.Services.Blob_manager import BlobManager
+from Source.Services.blob_manager import BlobManager
 
 client = DocumentIntelligenceClient(
     endpoint="https://dai-moodle-eastus2.cognitiveservices.azure.com/", credential=AzureKeyCredential(
