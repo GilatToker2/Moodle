@@ -259,8 +259,8 @@ async def index_content_files_endpoint(
     **Usage Instructions:**
     1. **Provide Blob Paths**: List of blob paths to .md files you want to add to the search index
     2. **Content Type Detection**: Content type is automatically detected from path structure
-       - Files in 'videos_md' folders are treated as video content
-       - Files in 'docs_md' folders are treated as document content
+       - Files in 'Videos_md' folders are treated as video content
+       - Files in 'Docs_md' folders are treated as document content
     3. **New Index**: Choose whether to create a new index or add to existing
 
     **What the Function Does:**
@@ -338,8 +338,8 @@ async def summarize_md_file(
     - blob_path: Path to MD file in blob storage (e.g., "Section1/Processed-data/Videos_md/file.md")
 
     **Content Type Detection:**
-    - Files in 'videos_md' folders are treated as video content
-    - Files in 'docs_md' folders are treated as document content
+    - Files in 'Videos_md' folders are treated as video content
+    - Files in 'Docs_md' folders are treated as document content
 
     **Returns:**
     - Original filename
