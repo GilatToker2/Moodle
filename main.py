@@ -49,43 +49,20 @@ class ErrorResponse(BaseModel):
     detail: str
 
 class ProcessDocumentResponse(BaseModel):
-    message: str
-    original_filename: str
-    markdown_length: int
-    markdown_content: str
+    success: bool
+    blob_path: Optional[str] = None
 
 class ProcessVideoResponse(BaseModel):
-    message: str
-    original_filename: str
-    video_id: str
-    video_name: str
-    duration: str
-    transcript_segments: int
-    keywords: List[str]
-    topics: List[str]
-    summary_available: bool
-    markdown_length: int
-    markdown_content: str
-    structured_data: Dict[str, Any]
+    success: bool
+    blob_path: Optional[str] = None
 
 class IndexResponse(BaseModel):
     message: str
-    filename: str
-    content_type: str
     create_new_index: bool
-    success: bool
 
 class SummarizeResponse(BaseModel):
-    message: str
-    original_filename: str
-    content_type: str
-    summary_length: int
-    summary: str
-
-class SummarizeStorageResponse(BaseModel):
-    container_name: str
-    summary_length: int
-    summary: str
+    success: bool
+    blob_path: Optional[str] = None
 
 # ================================
 # 🏠 ROOT & HEALTH ENDPOINTS
@@ -159,18 +136,22 @@ async def process_document_file(
         # Process document from blob storage with new parameters
         result_blob_path = document_to_markdown(course_id, section_id, file_id, document_name, document_url)
 
-        if not result_blob_path:
-            raise HTTPException(status_code=500, detail="שגיאה בעיבוד המסמך")
-
-        return {
-            "message": f"מסמך עובד בהצלחה ונשמר ב-blob: {result_blob_path}",
-            "original_filename": document_name,
-            "markdown_length": 0,  # We don't download content just to get length
-            "markdown_content": f"קובץ עובד בהצלחה ונשמר ב-blob: {result_blob_path}"
-        }
+        if result_blob_path:
+            return {
+                "success": True,
+                "blob_path": result_blob_path
+            }
+        else:
+            return {
+                "success": False,
+                "blob_path": None
+            }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"שגיאה בעיבוד מסמך: {str(e)}")
+        return {
+            "success": False,
+            "blob_path": None
+        }
 
 # ================================
 # 🎥 VIDEO PROCESSING ENDPOINTS
@@ -226,27 +207,22 @@ async def process_video_file(
         # Process video from blob storage with new parameters
         result_blob_path = video_processor.process_video_to_md(course_id, section_id, file_id, video_name, video_url, merge_segments_duration)
 
-        if not result_blob_path:
-            raise HTTPException(status_code=500, detail="Error processing video")
-
-        return {
-            "message": f"Video processed successfully and saved to blob: {result_blob_path}",
-            "original_filename": video_name,
-            "video_id": "processed",
-            "video_name": video_name,
-            "duration": "unknown",
-            "transcript_segments": 0,
-            "keywords": [],
-            "topics": [],
-            "summary_available": True,
-            "markdown_length": 0,
-            "markdown_content": f"Video processed successfully and saved to blob: {result_blob_path}",
-            "structured_data": {"result_path": result_blob_path}
-        }
+        if result_blob_path:
+            return {
+                "success": True,
+                "blob_path": result_blob_path
+            }
+        else:
+            return {
+                "success": False,
+                "blob_path": None
+            }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing video: {str(e)}")
-
+        return {
+            "success": False,
+            "blob_path": None
+        }
 
 # ================================
 # 🗂️ INDEXING ENDPOINTS
@@ -308,12 +284,8 @@ async def index_content_files_endpoint(
 
         return {
             "message": result,
-            "filename": f"{len(blob_paths)} files",
-            "content_type": "auto-detected",
-            "create_new_index": create_new_index,
-            "success": "successfully" in result.lower()
+            "create_new_index": create_new_index
         }
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error indexing files: {str(e)}")
 
@@ -365,36 +337,41 @@ async def summarize_md_file(
     try:
         # Check if file is MD
         if not blob_path.lower().endswith('.md'):
-            raise HTTPException(status_code=400, detail="Only MD files are supported")
+            return {
+                "success": False,
+                "blob_path": None
+            }
 
         # Use summarizer.summarize_md_file function - it handles everything internally
         result_blob_path = summarizer.summarize_md_file(blob_path)
 
-        if not result_blob_path:
-            raise HTTPException(status_code=500, detail="Error creating summary")
+        if result_blob_path:
+            return {
+                "success": True,
+                "blob_path": result_blob_path
+            }
+        else:
+            return {
+                "success": False,
+                "blob_path": None
+            }
 
-        filename = os.path.basename(blob_path)
-
-        return {
-            "message": f"Summary created successfully and saved to blob: {result_blob_path}",
-            "original_filename": filename,
-            "content_type": "auto-detected",
-            "summary_length": 0,  # We don't download content just to get length
-            "summary": f"Summary created successfully and saved to blob: {result_blob_path}"
-        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating summary: {str(e)}")
-
+        return {
+            "success": False,
+            "blob_path": None
+        }
 
 @app.post(
     "/summarize/section",
-    response_model=SummarizeStorageResponse,
+    response_model=SummarizeResponse,
     responses={
         404: {"model": ErrorResponse, "description": "No content found"},
         500: {"model": ErrorResponse, "description": "Section summarization failed"}
     },
     tags=["Summarization"]
 )
+
 async def summarize_section_from_blob(
         full_blob_path: str = Form(..., description="Full blob path to section summaries (e.g., course1/Summaries/Section1)")
 ):
@@ -416,33 +393,33 @@ async def summarize_section_from_blob(
     - full_blob_path: Full blob path to section summaries (e.g., "course1/Summaries/Section1")
 
     **Returns:**
-    - Container name used
-    - Summary length (characters)
-    - Generated section summary text
+    - success: Boolean indicating if the operation was successful
+    - blob_path: Path to the created summary file in blob storage
     """
     try:
         result_blob_path = summarizer.summarize_section_from_blob(full_blob_path)
 
-        if not result_blob_path:
-            raise HTTPException(status_code=404, detail="No content found or error creating section summary")
+        if result_blob_path:
+            return {
+                "success": True,
+                "blob_path": result_blob_path
+            }
+        else:
+            return {
+                "success": False,
+                "blob_path": None
+            }
 
-        # Extract container name from path
-        container_name = full_blob_path.split('/')[0] if '/' in full_blob_path else full_blob_path
-
-        return {
-            "container_name": container_name,
-            "summary_length": 0,  # We don't download content just to get length
-            "summary": f"Section summary created successfully and saved to blob: {result_blob_path}"
-        }
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating section summary: {str(e)}")
+        return {
+            "success": False,
+            "blob_path": None
+        }
 
 
 @app.post(
     "/summarize/course",
-    response_model=SummarizeStorageResponse,
+    response_model=SummarizeResponse,
     responses={
         404: {"model": ErrorResponse, "description": "No content found"},
         500: {"model": ErrorResponse, "description": "Course summarization failed"}
@@ -470,30 +447,28 @@ async def summarize_course_from_blob(
     - full_blob_path: Full blob path to sections summary folder (e.g., "course1/Summaries/Sections_summary")
 
     **Returns:**
-    - Container name used
-    - Summary length (characters)
-    - Generated course summary text
+    - success: Boolean indicating if the operation was successful
+    - blob_path: Path to the created summary file in blob storage
     """
     try:
         result_blob_path = summarizer.summarize_course_from_blob(full_blob_path)
 
-        if not result_blob_path:
-            raise HTTPException(status_code=404, detail="No content found or error creating course summary")
+        if result_blob_path:
+            return {
+                "success": True,
+                "blob_path": result_blob_path
+            }
+        else:
+            return {
+                "success": False,
+                "blob_path": None
+            }
 
-        # Extract container name from path
-        container_name = full_blob_path.split('/')[0] if '/' in full_blob_path else full_blob_path
-
-        return {
-            "container_name": container_name,
-            "summary_length": 0,  # We don't download content just to get length
-            "summary": f"Course summary created successfully and saved to blob: {result_blob_path}"
-        }
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating course summary: {str(e)}")
-
-
+        return {
+            "success": False,
+            "blob_path": None
+        }
 
 # ================================
 # 🚀 הרצת השרת
