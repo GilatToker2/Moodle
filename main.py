@@ -11,7 +11,7 @@
 - SEARCH_SERVICE_NAME
 """
 
-from fastapi import FastAPI, HTTPException, Form
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -64,6 +64,34 @@ class SummarizeResponse(BaseModel):
     success: bool
     blob_path: Optional[str] = None
 
+class ProcessDocumentRequest(BaseModel):
+    course_id: str
+    section_id: str
+    file_id: int
+    document_name: str
+    document_url: str
+
+class ProcessVideoRequest(BaseModel):
+    course_id: str
+    section_id: str
+    file_id: int
+    video_name: str
+    video_url: str
+    merge_segments_duration: Optional[int] = 30
+
+class IndexRequest(BaseModel):
+    blob_paths: List[str]
+    create_new_index: bool = False
+
+class SummarizeRequest(BaseModel):
+    blob_path: str
+
+class SummarizeSectionRequest(BaseModel):
+    full_blob_path: str
+
+class SummarizeCourseRequest(BaseModel):
+    full_blob_path: str
+
 # ================================
 # 🏠 ROOT & HEALTH ENDPOINTS
 # ================================
@@ -96,13 +124,7 @@ async def root():
     responses={500: {"model": ErrorResponse, "description": "Document processing failed"}},
     tags=["Document Processing"]
 )
-async def process_document_file(
-    course_id: str = Form(..., description="מזהה הקורס (למשל: CS101)"),
-    section_id: str = Form(..., description="מזהה הסקציה (למשל: Section1)"),
-    file_id: int = Form(..., description="מזהה הקובץ (למשל: 1)"),
-    document_name: str = Form(..., description="שם המסמך (למשל: בדידה תרגול 02)"),
-    document_url: str = Form(..., description="נתיב הקובץ ב-blob storage (למשל: bdida_tirgul_02.pdf)")
-):
+async def process_document_file(request: ProcessDocumentRequest):
     """
     📄 Process Document to Markdown Format
 
@@ -119,12 +141,16 @@ async def process_document_file(
     • Document name is included in the transcription
     • Returns structured Markdown content
 
-    **Parameters:**
-    - course_id: Course identifier (e.g., "CS101")
-    - section_id: Section identifier (e.g., "Section1")
-    - file_id: File identifier (e.g., 1)
-    - document_name: Document name (e.g., "בדידה תרגול 02")
-    - document_url: Path to document in blob storage (e.g., "Raw-data/bdida_tirgul_02.pdf")
+    **Request Body Example:**
+    ```json
+    {
+        "course_id": "CS101",
+        "section_id": "Section1",
+        "file_id": 1,
+        "document_name": "בדידה תרגול 02",
+        "document_url": "bdida_tirgul_02.pdf"
+    }
+    ```
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
@@ -132,7 +158,13 @@ async def process_document_file(
     """
     try:
         # Process document from blob storage with new parameters
-        result_blob_path = document_to_markdown(course_id, section_id, file_id, document_name, document_url)
+        result_blob_path = document_to_markdown(
+            request.course_id,
+            request.section_id,
+            request.file_id,
+            request.document_name,
+            request.document_url
+        )
 
         if result_blob_path:
             return {
@@ -161,14 +193,7 @@ async def process_document_file(
     responses={500: {"model": ErrorResponse, "description": "Video processing failed"}},
     tags=["Video Processing"]
 )
-async def process_video_file(
-    course_id: str = Form(..., description="מזהה הקורס (למשל: CS101)"),
-    section_id: str = Form(..., description="מזהה הסקציה (למשל: Section1)"),
-    file_id: int = Form(..., description="מזהה הקובץ (למשל: 1)"),
-    video_name: str = Form(..., description="שם הוידאו (למשל: שיעור 1 - מבוא למתמטיקה דיסקרטית)"),
-    video_url: str = Form(..., description="נתיב הוידאו ב-blob storage (למשל: L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4)"),
-    merge_segments_duration: Optional[int] = Form(30, description="Duration in seconds for merging transcript segments")
-):
+async def process_video_file(request: ProcessVideoRequest):
     """
     🎥 Process Video File with Azure Video Indexer
 
@@ -185,13 +210,17 @@ async def process_video_file(
     • Saves markdown to blob storage with new structure: CourseID/SectionID/Videos_md/FileID.md
     • Video name is included in the transcription
 
-    **Parameters:**
-    - course_id: Course identifier (e.g., "CS101")
-    - section_id: Section identifier (e.g., "Section1")
-    - file_id: File identifier (e.g., 2)
-    - video_name: Video name (e.g., "שיעור ראשון - חתוך")
-    - video_url: Path to video in blob storage (e.g., "L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4")
-    - merge_segments_duration: Duration in seconds for merging transcript segments (default: 30)
+    **Request Body Example:**
+    ```json
+    {
+        "course_id": "CS101",
+        "section_id": "Section1",
+        "file_id": 2,
+        "video_name": "שיעור ראשון - חתוך",
+        "video_url": "L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4",
+        "merge_segments_duration": 30
+    }
+    ```
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
@@ -199,7 +228,14 @@ async def process_video_file(
     """
     try:
         # Process video from blob storage with new parameters
-        result_blob_path = video_processor.process_video_to_md(course_id, section_id, file_id, video_name, video_url, merge_segments_duration)
+        result_blob_path = video_processor.process_video_to_md(
+            request.course_id,
+            request.section_id,
+            request.file_id,
+            request.video_name,
+            request.video_url,
+            request.merge_segments_duration
+        )
 
         if result_blob_path:
             return {
@@ -231,11 +267,7 @@ async def process_video_file(
     },
     tags=["Indexing"]
 )
-async def index_content_files_endpoint(
-        blob_paths: str = Form(...,
-                               description="Comma-separated list of blob paths to MD files (e.g., 'CS101/Section1/Videos_md/2.md,CS101/Section1/Docs_md/1.md')"),
-        create_new_index: bool = Form(False, description="Create new index? (default: False)")
-):
+async def index_content_files_endpoint(request: IndexRequest):
     """
     🗂️ Index MD Files from Blob Storage to Search Index
 
@@ -256,6 +288,17 @@ async def index_content_files_endpoint(
     • Generates embeddings for each chunk
     • Adds to Azure Search index
 
+    **Request Body Example:**
+    ```json
+    {
+        "blob_paths": [
+            "CS101/Section1/Videos_md/2.md",
+            "CS101/Section1/Docs_md/1.md"
+        ],
+        "create_new_index": false
+    }
+    ```
+
     **File Examples:**
     - **Document**: "CS101/Section1/Docs_md/bdida_tirgul_02.md"
     - **Video**: "CS101/Section1/Videos_md/L1_091004f349688522f773afc884451c9af6da18fb_Trim.md"
@@ -265,30 +308,26 @@ async def index_content_files_endpoint(
     - create_new_index: Boolean indicating whether a new index was created
     """
     try:
-        # Parse comma-separated blob paths into a list
-        if not blob_paths or not blob_paths.strip():
-            raise HTTPException(status_code=400, detail="Blob paths cannot be empty")
-
-        # Split by comma and clean up whitespace
-        blob_paths_list = [path.strip() for path in blob_paths.split(',') if path.strip()]
-
-        if not blob_paths_list:
-            raise HTTPException(status_code=400, detail="No valid blob paths provided")
+        # Validate blob paths
+        if not request.blob_paths:
+            raise HTTPException(status_code=400, detail="Blob paths list cannot be empty")
 
         # Check all files are MD
-        for blob_path in blob_paths_list:
+        for blob_path in request.blob_paths:
             if not blob_path.lower().endswith('.md'):
                 raise HTTPException(status_code=400, detail=f"Only MD files are supported: {blob_path}")
 
         # Use the unified_indexer to process files from blob storage
-        result = index_content_files(blob_paths_list, create_new_index=create_new_index)
+        result = index_content_files(request.blob_paths, create_new_index=request.create_new_index)
 
         return {
             "message": result,
-            "create_new_index": create_new_index
+            "create_new_index": request.create_new_index
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error indexing files: {str(e)}")
+
+
 
 
 # ================================
@@ -304,9 +343,8 @@ async def index_content_files_endpoint(
     },
     tags=["Summarization"]
 )
-async def summarize_md_file(
-        blob_path: str = Form(..., description="Path to MD file in blob storage (e.g., CS101/Section1/Videos_md/2.md)")
-):
+
+async def summarize_md_file(request: SummarizeRequest):
     """
     📝 Create Summary from Markdown File in Blob Storage
 
@@ -321,8 +359,12 @@ async def summarize_md_file(
     • Uses Azure OpenAI for intelligent summarization
     • Saves summary back to blob storage
 
-    **Parameters:**
-    - blob_path: Path to MD file in blob storage (e.g., "CS101/Section1/Videos_md/L1_091004f349688522f773afc884451c9af6da18fb_Trim.md")
+    **Request Body Example:**
+    ```json
+    {
+        "blob_path": "CS101/Section1/Videos_md/2.md"
+    }
+    ```
 
     **Content Type Detection:**
     - Files in 'Videos_md' folders are treated as video content
@@ -334,14 +376,14 @@ async def summarize_md_file(
     """
     try:
         # Check if file is MD
-        if not blob_path.lower().endswith('.md'):
+        if not request.blob_path.lower().endswith('.md'):
             return {
                 "success": False,
                 "blob_path": None
             }
 
         # Use summarizer.summarize_md_file function - it handles everything internally
-        result_blob_path = summarizer.summarize_md_file(blob_path)
+        result_blob_path = summarizer.summarize_md_file(request.blob_path)
 
         if result_blob_path:
             return {
@@ -370,9 +412,7 @@ async def summarize_md_file(
     tags=["Summarization"]
 )
 
-async def summarize_section_from_blob(
-        full_blob_path: str = Form(..., description="Full blob path to section summaries (e.g., CS101/Section1/file_summaries)")
-):
+async def summarize_section_from_blob(request: SummarizeSectionRequest):
     """
     📚 Create Section Summary from Azure Storage
 
@@ -387,15 +427,20 @@ async def summarize_section_from_blob(
     • Uses Azure OpenAI for intelligent content analysis
     • Saves section summary back to blob storage
 
-    **Parameters:**
-    - full_blob_path: Full blob path to section summaries (e.g., "CS101/Section1/file_summaries")
+    **Request Body Example:**
+    ```json
+    {
+        "full_blob_path": "CS101/Section1/file_summaries"
+    }
+    ```
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
     - blob_path: Path to the created summary file in blob storage
     """
     try:
-        result_blob_path = summarizer.summarize_section_from_blob(full_blob_path)
+        result_blob_path = summarizer.summarize_section_from_blob(request.full_blob_path)
+
 
         if result_blob_path:
             return {
@@ -424,9 +469,7 @@ async def summarize_section_from_blob(
     },
     tags=["Summarization"]
 )
-async def summarize_course_from_blob(
-    full_blob_path: str = Form(..., description="Full blob path to sections summary folder (e.g., CS101/section_summaries)")
-):
+async def summarize_course_from_blob(request: SummarizeCourseRequest):
     """
     🎓 Create Complete Course Summary from Azure Storage
 
@@ -441,15 +484,19 @@ async def summarize_course_from_blob(
     • Uses Azure OpenAI for intelligent course-level analysis
     • Saves course summary back to blob storage
 
-    **Parameters:**
-    - full_blob_path: Full blob path to sections summary folder (e.g., "CS101/section_summaries")
+    **Request Body Example:**
+    ```json
+    {
+        "full_blob_path": "CS101/section_summaries"
+    }
+    ```
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
     - blob_path: Path to the created summary file in blob storage
     """
     try:
-        result_blob_path = summarizer.summarize_course_from_blob(full_blob_path)
+        result_blob_path = summarizer.summarize_course_from_blob(request.full_blob_path)
 
         if result_blob_path:
             return {
