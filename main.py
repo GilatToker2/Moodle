@@ -101,7 +101,7 @@ async def process_document_file(
     section_id: str = Form(..., description="מזהה הסקציה (למשל: Section1)"),
     file_id: int = Form(..., description="מזהה הקובץ (למשל: 1)"),
     document_name: str = Form(..., description="שם המסמך (למשל: בדידה תרגול 02)"),
-    document_url: str = Form(..., description="נתיב הקובץ ב-blob storage (למשל: Section1/Raw-data/Docs/filename.pdf)")
+    document_url: str = Form(..., description="נתיב הקובץ ב-blob storage (למשל: bdida_tirgul_02.pdf)")
 ):
     """
     📄 Process Document to Markdown Format
@@ -123,14 +123,12 @@ async def process_document_file(
     - course_id: Course identifier (e.g., "CS101")
     - section_id: Section identifier (e.g., "Section1")
     - file_id: File identifier (e.g., 1)
-    - document_name: Document name (will be included in transcription)
-    - document_url: Path to document in blob storage
+    - document_name: Document name (e.g., "בדידה תרגול 02")
+    - document_url: Path to document in blob storage (e.g., "Raw-data/bdida_tirgul_02.pdf")
 
     **Returns:**
-    - Processing status message
-    - Original filename
-    - Markdown content length
-    - Complete Markdown content
+    - success: Boolean indicating if the operation was successful
+    - blob_path: Path to the created markdown file in blob storage (or None if failed)
     """
     try:
         # Process document from blob storage with new parameters
@@ -168,7 +166,7 @@ async def process_video_file(
     section_id: str = Form(..., description="מזהה הסקציה (למשל: Section1)"),
     file_id: int = Form(..., description="מזהה הקובץ (למשל: 1)"),
     video_name: str = Form(..., description="שם הוידאו (למשל: שיעור 1 - מבוא למתמטיקה דיסקרטית)"),
-    video_url: str = Form(..., description="נתיב הוידאו ב-blob storage (למשל: Section1/Raw-data/Videos/filename.mp4)"),
+    video_url: str = Form(..., description="נתיב הוידאו ב-blob storage (למשל: L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4)"),
     merge_segments_duration: Optional[int] = Form(30, description="Duration in seconds for merging transcript segments")
 ):
     """
@@ -190,18 +188,14 @@ async def process_video_file(
     **Parameters:**
     - course_id: Course identifier (e.g., "CS101")
     - section_id: Section identifier (e.g., "Section1")
-    - file_id: File identifier (e.g., 1)
-    - video_name: Video name (will be included in transcription)
-    - video_url: Path to video in blob storage
+    - file_id: File identifier (e.g., 2)
+    - video_name: Video name (e.g., "שיעור ראשון - חתוך")
+    - video_url: Path to video in blob storage (e.g., "L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4")
     - merge_segments_duration: Duration in seconds for merging transcript segments (default: 30)
 
     **Returns:**
-    - Video ID from Video Indexer
-    - Video name and duration
-    - Number of transcript segments
-    - Extracted keywords and topics
-    - Complete structured Markdown content
-    - Structured video data with all metadata
+    - success: Boolean indicating if the operation was successful
+    - blob_path: Path to the created markdown file in blob storage (or None if failed)
     """
     try:
         # Process video from blob storage with new parameters
@@ -238,7 +232,7 @@ async def process_video_file(
     tags=["Indexing"]
 )
 async def index_content_files_endpoint(
-        blob_paths: List[str] = Form(..., description="List of blob paths to MD files (e.g., ['Section1/Processed-data/Videos_md/file.md'])"),
+        blob_paths: List[str] = Form(..., description="List of blob paths to MD files (e.g., ['CS101/Section1/Videos_md/2.md','CS101/Section1/Docs_md/1.md'])"),
         create_new_index: bool = Form(False, description="Create new index? (default: False)")
 ):
     """
@@ -262,12 +256,12 @@ async def index_content_files_endpoint(
     • Adds to Azure Search index
 
     **File Examples:**
-    - **Document**: "Section1/Processed-data/Docs_md/bdida_tirgul_02.md"
-    - **Video**: "Section1/Processed-data/Videos_md/L1_091004f349688522f773afc884451c9af6da18fb_Trim.md"
+    - **Document**: "CS101/Section1/Docs_md/1.md"
+    - **Video**: "CS101/Section1/Videos_md/2.md"
 
     **Returns:**
-    - Success/failure message
-    - Processing details
+    - message: Result message from the indexing operation
+    - create_new_index: Boolean indicating whether a new index was created
     """
     try:
         # Validate blob paths
@@ -305,7 +299,7 @@ async def index_content_files_endpoint(
     tags=["Summarization"]
 )
 async def summarize_md_file(
-        blob_path: str = Form(..., description="Path to MD file in blob storage (e.g., Section1/Processed-data/Videos_md/file.md)")
+        blob_path: str = Form(..., description="Path to MD file in blob storage (e.g., CS101/Section1/Videos_md/2.md)")
 ):
     """
     📝 Create Summary from Markdown File in Blob Storage
@@ -322,17 +316,15 @@ async def summarize_md_file(
     • Saves summary back to blob storage
 
     **Parameters:**
-    - blob_path: Path to MD file in blob storage (e.g., "Section1/Processed-data/Videos_md/file.md")
+    - blob_path: Path to MD file in blob storage (e.g., "CS101/Section1/Videos_md/L1_091004f349688522f773afc884451c9af6da18fb_Trim.md")
 
     **Content Type Detection:**
     - Files in 'Videos_md' folders are treated as video content
     - Files in 'Docs_md' folders are treated as document content
 
     **Returns:**
-    - Original filename
-    - Content type used
-    - Summary length (characters)
-    - Generated summary text
+    - success: Boolean indicating if the operation was successful
+    - blob_path: Path to the created summary file in blob storage (or None if failed)
     """
     try:
         # Check if file is MD
@@ -373,7 +365,7 @@ async def summarize_md_file(
 )
 
 async def summarize_section_from_blob(
-        full_blob_path: str = Form(..., description="Full blob path to section summaries (e.g., course1/Summaries/Section1)")
+        full_blob_path: str = Form(..., description="Full blob path to section summaries (e.g., CS101/Section1/file_summaries)")
 ):
     """
     📚 Create Section Summary from Azure Storage
@@ -390,7 +382,7 @@ async def summarize_section_from_blob(
     • Saves section summary back to blob storage
 
     **Parameters:**
-    - full_blob_path: Full blob path to section summaries (e.g., "course1/Summaries/Section1")
+    - full_blob_path: Full blob path to section summaries (e.g., "CS101/Section1/file_summaries")
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
@@ -427,7 +419,7 @@ async def summarize_section_from_blob(
     tags=["Summarization"]
 )
 async def summarize_course_from_blob(
-    full_blob_path: str = Form(..., description="Full blob path to sections summary folder (e.g., course1/Summaries/Sections_summary)")
+    full_blob_path: str = Form(..., description="Full blob path to sections summary folder (e.g., CS101/section_summaries)")
 ):
     """
     🎓 Create Complete Course Summary from Azure Storage
@@ -444,7 +436,7 @@ async def summarize_course_from_blob(
     • Saves course summary back to blob storage
 
     **Parameters:**
-    - full_blob_path: Full blob path to sections summary folder (e.g., "course1/Summaries/Sections_summary")
+    - full_blob_path: Full blob path to sections summary folder (e.g., "CS101/section_summaries")
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
