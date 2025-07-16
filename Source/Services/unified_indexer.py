@@ -677,9 +677,8 @@ def main():
 
     # Define blob paths to process - type will be auto-detected from path
     blob_paths = [
-        "Section1/Processed-data/Videos_md/L1_091004f349688522f773afc884451c9af6da18fb_Trim.md",
-        "Section1/Processed-data/Docs_md/bdida_tirgul_02.md",
-        "Section1/Processed-data/Docs_md/Ex5Sol.md"
+        "CS101/Section1/Videos_md/2.md",
+        "CS101/Section1/Docs_md/1.md",
     ]
 
     result = index_content_files(blob_paths, create_new_index=True)

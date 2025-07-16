@@ -430,50 +430,46 @@ class VideoIndexerManager:
 
         return "\n".join(md_content)
 
-    def process_video_to_md(self, blob_video_path: str, merge_segments_duration: Optional[int] = 30) -> str | None:
+
+    def process_video_to_md(self, course_id: str, section_id: str, file_id: int, video_name: str, video_url: str, merge_segments_duration: Optional[int] = 30) -> str | None:
         """
         עיבוד וידאו מ-blob storage ליצירת קובץ markdown
 
         Args:
-            blob_video_path: נתיב הוידאו ב-blob storage
+            course_id: מזהה הקורס
+            section_id: מזהה הסקציה
+            file_id: מזהה הקובץ
+            video_name: שם הוידאו (ייכנס לתמלול)
+            video_url: נתיב הוידאו ב-blob storage
             merge_segments_duration: משך זמן מקסימלי בשניות לאיחוד סגמנטים
 
         Returns:
             נתיב הקובץ ב-blob storage או None אם נכשל
         """
-        blob_manager = BlobManager()
+        # יצירת מנהלי blob - אחד לקריאה מ-raw-data ואחד לכתיבה ל-processeddata
+        blob_manager_read = BlobManager(container_name="raw-data")
+        blob_manager_write = BlobManager(container_name="processeddata")
 
         # בדיקת סיומת הקובץ
-        file_ext = os.path.splitext(blob_video_path)[1].lower()
+        file_ext = os.path.splitext(video_url)[1].lower()
         if file_ext not in self.supported_formats:
-            print(f"❌ פורמט וידאו לא נתמך: {blob_video_path}")
+            print(f"❌ פורמט וידאו לא נתמך: {video_url}")
             return None
 
-        # חילוץ מבנה התיקיות
-        path_parts = blob_video_path.split('/')
-        try:
-            raw_data_index = path_parts.index("Raw-data")
-            base_path = '/'.join(path_parts[:raw_data_index]) if raw_data_index > 0 else ""
-        except ValueError:
-            base_path = ""
-
-        # יצירת SAS URL לוידאו
-        print(f"🔗 יוצר SAS URL לוידאו: {blob_video_path}")
-        video_sas_url = blob_manager.generate_sas_url(blob_video_path, hours=4)
+        # יצירת SAS URL לוידאו מקונטיינר raw-data
+        print(f"🔗 יוצר SAS URL לוידאו מקונטיינר raw-data: {video_url}")
+        video_sas_url = blob_manager_read.generate_sas_url(video_url, hours=4)
 
         if not video_sas_url:
-            print(f"❌ נכשלה יצירת SAS URL לוידאו: {blob_video_path}")
+            print(f"❌ נכשלה יצירת SAS URL לוידאו: {video_url}")
             return None
 
-        filename = os.path.basename(blob_video_path)
-        video_name = os.path.splitext(filename)[0]
-
-        print(f"🔄 מעבד וידאו: {filename}")
+        print(f"🔄 מעבד וידאו: {video_name}")
 
         try:
-            print(f"\n🎬 מתחיל עיבוד וידאו ל-MD: {filename}")
+            print(f"\n🎬 מתחיל עיבוד וידאו ל-MD: {video_name}")
 
-            # העלאה ועיבוד
+            # העלאה ועיבוד ל-Video Indexer עם שם הוידאו
             video_id = self.upload_video_from_url(video_sas_url, video_name)
             index_data = self.wait_for_indexing(video_id)
 
@@ -498,9 +494,10 @@ class VideoIndexerManager:
             # חילוץ מטא-דאטה
             metadata = self.extract_video_metadata(index_data)
 
-            # יצירת מבנה נתונים מובנה
+            # יצירת מבנה נתונים מובנה עם שם הוידאו
             structured_data = {
                 "id": video_id,
+                "name": video_name,  # שימוש בשם שהועבר במקום שם הקובץ
                 **metadata,
                 "transcript_segments": transcript_segments,
                 "full_transcript": " ".join([seg["text"] for seg in transcript_segments]),
@@ -519,55 +516,52 @@ class VideoIndexerManager:
             print(f"❌ נכשל עיבוד הוידאו: {str(e)}")
             return None
 
-        # יצירת נתיב היעד
-        base_name = os.path.splitext(filename)[0]
-        md_filename = f"{base_name}.md"
+        # יצירת נתיב היעד לפי המבנה: CourseID/SectionID/Videos_md/FileID.md
+        target_blob_path = f"{course_id}/{section_id}/Videos_md/{file_id}.md"
 
-        if base_path:
-            target_folder = f"{base_path}/Processed-data/Videos_md"
-            target_blob_path = f"{base_path}/Processed-data/Videos_md/{md_filename}"
-        else:
-            target_folder = "Processed-data/Videos_md"
-            target_blob_path = f"Processed-data/Videos_md/{md_filename}"
+        print(f"📤 מעלה לקונטיינר processeddata: {target_blob_path}")
 
-        print(f"📤 מעלה ל-blob: {target_blob_path}")
-
-        # שמירה ל-blob storage - הנתיב המלא כ-blob_name בקונטיינר course1
-        full_blob_path = f"{target_folder}/{md_filename}"
-        success = blob_manager.upload_text_to_blob(
+        # שמירה לקונטיינר processeddata
+        success = blob_manager_write.upload_text_to_blob(
             text_content=md_content,
-            blob_name=full_blob_path,  # הנתיב המלא כולל Section1/Processed-data/Videos_md/
-            container="course1"  # קונטיינר מפורש
+            blob_name=target_blob_path
         )
 
         if success:
-            print(f"✅ הקובץ הועלה בהצלחה ל-blob: course1/{full_blob_path}")
+            print(f"✅ הקובץ הועלה בהצלחה לקונטיינר processeddata: {target_blob_path}")
 
             # ניקוי: מחיקת הוידאו מ-Video Indexer כדי לנקות קונטיינרים מיותרים
             print("🧹 מנקה קונטיינרים מיותרים...")
             self.delete_video(video_id)
 
-            return f"course1/{full_blob_path}"
+            return target_blob_path
         else:
-            print(f"❌ נכשלה העלאת הקובץ ל-blob storage")
+            print(f"❌ נכשלה העלאת הקובץ לקונטיינר processeddata")
             return None
 
 
 if __name__ == "__main__":
-    # עיבוד וידאו מ-blob storage
-    blob_video_path = "Section1/Raw-data/Videos/L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4"
+    # עיבוד וידאו מ-blob storage עם פרמטרים חדשים
+    course_id = "CS101"
+    section_id = "Section1"
+    file_id = 2
+    video_name = "שיעור ראשון - חתוך"
+    video_url = "L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4"
 
-    print(f"🧪 מעבד וידאו: {blob_video_path}")
+    print(f"🧪 מעבד וידאו: {video_name}")
+    print(f"📍 CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
+    print(f"🔗 VideoURL: {video_url}")
 
     try:
         manager = VideoIndexerManager()
-        result = manager.process_video_to_md(blob_video_path, merge_segments_duration=30)
+        result = manager.process_video_to_md(course_id, section_id, file_id, video_name, video_url, merge_segments_duration=30)
 
         if result:
             print(f"\n🎉 הוידאו עובד בהצלחה: {result}")
-            print(f"📁 הקובץ נשמר עם שמירה על מבנה התיקיות")
+            print(f"📁 הקובץ נשמר במבנה: {course_id}/{section_id}/Videos_md/{file_id}.md")
         else:
-            print(f"\n❌ נכשל עיבוד הוידאו: {blob_video_path}")
+            print(f"\n❌ נכשל עיבוד הוידאו: {video_name}")
 
     except Exception as e:
         print(f"❌ שגיאה בעיבוד הוידאו: {e}")
+

@@ -513,26 +513,34 @@ class ContentSummarizer:
 
     def _save_summary_to_blob(self, summary: str, original_blob_path: str) -> str:
         """
-        שמירת הסיכום לבלוב במבנה Summaries/Section/filename.md
+        שמירת הסיכום לבלוב במבנה CourseID/SectionID/file_summaries/FileID.md
 
         Args:
             summary: הסיכום לשמירה
-            original_blob_path: נתיב הקובץ המקורי בבלוב
+            original_blob_path: נתיב הקובץ המקורי בבלוב (למשל: "CS101/Section1/Docs_md/1.md")
 
         Returns:
             נתיב הסיכום בבלוב או None אם נכשל
         """
         try:
-            # חילוץ שם הסקשן מהנתיב המקורי
-            section_name = self._extract_section_from_path(original_blob_path)
+            # פירוק הנתיב המקורי
+            # למשל: "CS101/Section1/Docs_md/1.md" -> ["CS101", "Section1", "Docs_md", "1.md"]
+            path_parts = original_blob_path.split('/')
 
-            # חילוץ שם הקובץ
-            filename = os.path.basename(original_blob_path)
-            base_name = os.path.splitext(filename)[0]
-            summary_filename = f"{base_name}_summary.md"
+            if len(path_parts) < 4:
+                print(f"❌ נתיב לא תקין: {original_blob_path}")
+                return None
+
+            course_id = path_parts[0]  # CS101
+            section_id = path_parts[1]  # Section1
+            # path_parts[2] הוא Docs_md או Videos_md
+            filename = path_parts[3]  # 1.md
+
+            # חילוץ שם הקובץ בלי סיומת
+            base_name = os.path.splitext(filename)[0]  # 1
 
             # יצירת נתיב הסיכום החדש
-            summary_blob_path = f"Summaries/{section_name}/{summary_filename}"
+            summary_blob_path = f"{course_id}/{section_id}/file_summaries/{base_name}.md"
 
             print(f"📤 Saving summary to blob: {summary_blob_path}")
 
@@ -557,57 +565,58 @@ class ContentSummarizer:
         """
         סיכום section שלם מכל קבצי הסיכומים ב-blob storage
         Args:
-            full_blob_path: נתיב מלא בבלוב (למשל: "course1/Summaries/Section1")
+            full_blob_path: נתיב לתיקיית file_summaries (למשל: "CS101/Section1/file_summaries")
         Returns:
             נתיב הסיכום בבלוב או None אם נכשל
         """
 
         try:
-            # פיצול הנתיב המלא לקונטיינר ונתיב פנימי
-            path_parts = full_blob_path.split('/', 1)
-            if len(path_parts) < 2:
-                print(f"❌ נתיב לא תקין: {full_blob_path}. צריך להיות בפורמט: container/path")
+            # פירוק הנתיב: "CS101/Section1/file_summaries" -> ["CS101", "Section1", "file_summaries"]
+            path_parts = full_blob_path.split('/')
+
+            if len(path_parts) < 3:
+                print(f"❌ נתיב לא תקין: {full_blob_path}. צריך להיות בפורמט: CourseID/SectionID/file_summaries")
                 return None
 
-            container_name = path_parts[0]
-            section_path = path_parts[1]
+            course_id = path_parts[0]  # CS101
+            section_id = path_parts[1]  # Section1
+            # path_parts[2] צריך להיות file_summaries
 
-            print(f"📁 קונטיינר: {container_name}")
-            print(f"📂 נתיב section: {section_path}")
+            print(f"📁 CourseID: {course_id}")
+            print(f"📂 SectionID: {section_id}")
+            print(f"📂 נתיב file_summaries: {full_blob_path}")
 
-            # יצירת BlobManager עם הקונטיינר הספציפי
-            blob_manager = BlobManager(container_name)
+            # יצירת BlobManager עם הקונטיינר הברירת מחדל
+            blob_manager = BlobManager()
 
             # קבלת רשימת כל הקבצים בקונטיינר
             all_files = blob_manager.list_files()
 
             # סינון קבצים שנמצאים בנתיב הספציפי
-            section_files = [f for f in all_files if f.startswith(section_path + "/") and f.endswith(".md")]
+            section_files = [f for f in all_files if f.startswith(full_blob_path + "/") and f.endswith(".md")]
 
             if not section_files:
-                print(f"❌ לא נמצאו קבצי סיכומים ב-{section_path}")
+                print(f"❌ לא נמצאו קבצי סיכומים ב-{full_blob_path}")
                 return None
 
-            print(f"📁 נמצאו {len(section_files)} קבצי סיכומים ב-{section_path}:")
+            print(f"📁 נמצאו {len(section_files)} קבצי סיכומים ב-{full_blob_path}:")
             for file in section_files:
                 print(f"  - {file}")
 
-            # הורדה וקריאה של כל הקבצים
+            # הורדה וקריאה של כל הקבצים ישירות לזיכרון
             all_content = ""
             successful_files = []
 
             for file_path in section_files:
-                print(f"\n📥 מוריד קובץ: {file_path}")
-
-                # יצירת נתיב זמני לקובץ
-                temp_file_path = f"temp_{os.path.basename(file_path)}"
+                print(f"\n📥 מוריד קובץ לזיכרון: {file_path}")
 
                 try:
-                    # הורדת הקובץ
-                    if blob_manager.download_file(file_path, temp_file_path):
-                        # קריאת התוכן
-                        with open(temp_file_path, 'r', encoding='utf-8') as f:
-                            file_content = f.read()
+                    # הורדת הקובץ ישירות לזיכרון
+                    file_bytes = blob_manager.download_to_memory(file_path)
+
+                    if file_bytes:
+                        # המרה לטקסט
+                        file_content = file_bytes.decode('utf-8')
 
                         if file_content.strip():
                             all_content += f"\n\n{'=' * 50}\n"
@@ -618,20 +627,15 @@ class ContentSummarizer:
                             print(f"✅ קובץ נקרא בהצלחה: {len(file_content)} תווים")
                         else:
                             print(f"⚠️ קובץ ריק: {file_path}")
-
-                        # מחיקת הקובץ הזמני
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
+                    else:
+                        print(f"❌ נכשלה הורדת הקובץ: {file_path}")
 
                 except Exception as e:
                     print(f"❌ שגיאה בעיבוד קובץ {file_path}: {e}")
-                    # מחיקת הקובץ הזמני במקרה של שגיאה
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
                     continue
 
             if not successful_files:
-                print(f"❌ לא הצלחתי לקרוא אף קובץ מ-{section_path}")
+                print(f"❌ לא הצלחתי לקרוא אף קובץ מ-{full_blob_path}")
                 return None
 
             print(f"\n📊 סה\"כ עובד עם {len(successful_files)} קבצים")
@@ -668,17 +672,14 @@ class ContentSummarizer:
             print(f"✅ סיכום section נוצר בהצלחה!")
             print(f"📊 אורך הסיכום: {len(section_summary)} תווים")
 
-            # שמירת הסיכום לבלוב
-            section_name = os.path.basename(section_path)  # חילוץ שם הסקשן מהנתיב
-            summary_filename = f"{section_name}_section_summary.md"
-            summary_blob_path = f"Summaries/Sections_summary/{summary_filename}"
+            # שמירת הסיכום לבלוב במבנה החדש: CourseID/section_summaries/SectionID.md
+            summary_blob_path = f"{course_id}/section_summaries/{section_id}.md"
 
             print(f"📤 שומר סיכום section ל-blob: {summary_blob_path}")
 
             success = blob_manager.upload_text_to_blob(
                 text_content=section_summary,
-                blob_name=summary_blob_path,
-                container=container_name
+                blob_name=summary_blob_path
             )
 
             if success:
@@ -696,35 +697,36 @@ class ContentSummarizer:
         """
         סיכום קורס שלם מכל קבצי סיכומי ה-sections ב-blob storage
         Args:
-            full_blob_path: נתיב מלא לתיקיית סיכומי ה-sections (למשל: "course1/Summaries/Sections_summary")
+            full_blob_path: נתיב לתיקיית section_summaries (למשל: "CS101/section_summaries")
         Returns:
             נתיב הסיכום בבלוב או None אם נכשל
         """
 
         try:
-            # פיצול הנתיב המלא לקונטיינר ונתיב פנימי
-            path_parts = full_blob_path.split('/', 1)
+            # פירוק הנתיב: "CS101/section_summaries" -> ["CS101", "section_summaries"]
+            path_parts = full_blob_path.split('/')
+
             if len(path_parts) < 2:
-                print(f"❌ נתיב לא תקין: {full_blob_path}. צריך להיות בפורמט: container/path")
+                print(f"❌ נתיב לא תקין: {full_blob_path}. צריך להיות בפורמט: CourseID/section_summaries")
                 return None
 
-            container_name = path_parts[0]
-            sections_path = path_parts[1]
+            course_id = path_parts[0]  # CS101
+            # path_parts[1] צריך להיות section_summaries
 
-            print(f"📁 קונטיינר: {container_name}")
-            print(f"📂 נתיב sections: {sections_path}")
+            print(f"📁 CourseID: {course_id}")
+            print(f"📂 נתיב section_summaries: {full_blob_path}")
 
-            # יצירת BlobManager עם הקונטיינר הספציפי
-            blob_manager = BlobManager(container_name)
+            # יצירת BlobManager עם הקונטיינר הברירת מחדל
+            blob_manager = BlobManager()
 
             # קבלת רשימת כל הקבצים בקונטיינר
             all_files = blob_manager.list_files()
 
-            # סינון קבצים שנמצאים בתיקיית סיכומי ה-sections
-            sections_files = [f for f in all_files if f.startswith(sections_path + "/") and f.endswith(".md")]
+            # סינון קבצים שנמצאים בתיקיית section_summaries
+            sections_files = [f for f in all_files if f.startswith(full_blob_path + "/") and f.endswith(".md")]
 
             if not sections_files:
-                print(f"❌ לא נמצאו קבצי סיכומי sections ב-{sections_path}")
+                print(f"❌ לא נמצאו קבצי סיכומי sections ב-{full_blob_path}")
                 return None
 
             print(f"📁 נמצאו {len(sections_files)} קבצי סיכומי sections:")
@@ -763,7 +765,7 @@ class ContentSummarizer:
                     continue
 
             if not successful_files:
-                print(f"❌ לא הצלחתי לקרוא אף קובץ מ-{sections_path}")
+                print(f"❌ לא הצלחתי לקרוא אף קובץ מ-{full_blob_path}")
                 return None
 
             print(f"\n📊 סה\"כ עובד עם {len(successful_files)} קבצים")
@@ -800,16 +802,14 @@ class ContentSummarizer:
             print(f"✅ סיכום קורס נוצר בהצלחה!")
             print(f"📊 אורך הסיכום: {len(course_summary)} תווים")
 
-            # שמירת הסיכום לבלוב
-            course_summary_filename = "course_summary.md"
-            summary_blob_path = f"Summaries/{course_summary_filename}"
+            # שמירת הסיכום לבלוב במבנה החדש: CourseID/course_summary.md
+            summary_blob_path = f"{course_id}/course_summary.md"
 
             print(f"📤 שומר סיכום קורס ל-blob: {summary_blob_path}")
 
             success = blob_manager.upload_text_to_blob(
                 text_content=course_summary,
-                blob_name=summary_blob_path,
-                container=container_name
+                blob_name=summary_blob_path
             )
 
             if success:
@@ -867,9 +867,8 @@ def main():
     # print("\n🔄 Testing summarize_md_file with blob paths...")
     #
     # test_blob_paths = [
-    #     "Section1/Processed-data/Videos_md/L1_091004f349688522f773afc884451c9af6da18fb_Trim.md",
-    #     # "Section1/Processed-data/Docs_md/bdida_tirgul_02.md",
-    #     # "Section1/Processed-data/Docs_md/Ex5Sol.md"
+    #     "CS101/Section1/Videos_md/2.md",
+    #     "CS101/Section1/Docs_md/1.md",
     # ]
     #
     # successful_tests = 0
@@ -920,7 +919,8 @@ def main():
     # print("\n🔄 Testing summarize_section_from_blob...")
     #
     # # נתיב מלא בבלוב
-    # full_blob_path = "course1/Summaries/Section1"
+    # full_blob_path = "CS101/Section1/file_summaries"
+    #
     #
     # print(f"📂 Testing full blob path: {full_blob_path}")
     #
@@ -945,7 +945,7 @@ def main():
     print("\n🔄 Testing summarize_course_from_blob...")
 
     # נתיב מלא לתיקיית סיכומי ה-sections
-    full_blob_path = "course1/Summaries/Sections_summary"
+    full_blob_path = "CS101/section_summaries"
 
     print(f"📂 Testing course summary from path: {full_blob_path}")
 

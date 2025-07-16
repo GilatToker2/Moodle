@@ -120,7 +120,11 @@ async def root():
     tags=["Document Processing"]
 )
 async def process_document_file(
-    blob_file_path: str = Form(..., description="נתיב הקובץ ב-blob storage (למשל: Section1/Raw-data/Docs/filename.pdf)")
+    course_id: str = Form(..., description="מזהה הקורס (למשל: CS101)"),
+    section_id: str = Form(..., description="מזהה הסקציה (למשל: Section1)"),
+    file_id: int = Form(..., description="מזהה הקובץ (למשל: 1)"),
+    document_name: str = Form(..., description="שם המסמך (למשל: בדידה תרגול 02)"),
+    document_url: str = Form(..., description="נתיב הקובץ ב-blob storage (למשל: Section1/Raw-data/Docs/filename.pdf)")
 ):
     """
     📄 Process Document to Markdown Format
@@ -134,11 +138,16 @@ async def process_document_file(
     **What to Expect:**
     • Document is downloaded from blob storage and processed in memory
     • Uses Azure Document AI for intelligent text extraction
-    • Saves markdown to blob storage with folder structure preservation
+    • Saves markdown to blob storage with new structure: CourseID/SectionID/Docs_md/FileID.md
+    • Document name is included in the transcription
     • Returns structured Markdown content
 
     **Parameters:**
-    - blob_file_path: Path to document in blob storage (e.g., "Section1/Raw-data/Docs/filename.pdf")
+    - course_id: Course identifier (e.g., "CS101")
+    - section_id: Section identifier (e.g., "Section1")
+    - file_id: File identifier (e.g., 1)
+    - document_name: Document name (will be included in transcription)
+    - document_url: Path to document in blob storage
 
     **Returns:**
     - Processing status message
@@ -147,17 +156,15 @@ async def process_document_file(
     - Complete Markdown content
     """
     try:
-        # Process document from blob storage - function handles everything internally
-        result_blob_path = document_to_markdown(blob_file_path)
+        # Process document from blob storage with new parameters
+        result_blob_path = document_to_markdown(course_id, section_id, file_id, document_name, document_url)
 
         if not result_blob_path:
             raise HTTPException(status_code=500, detail="שגיאה בעיבוד המסמך")
 
-        filename = os.path.basename(blob_file_path)
-
         return {
             "message": f"מסמך עובד בהצלחה ונשמר ב-blob: {result_blob_path}",
-            "original_filename": filename,
+            "original_filename": document_name,
             "markdown_length": 0,  # We don't download content just to get length
             "markdown_content": f"קובץ עובד בהצלחה ונשמר ב-blob: {result_blob_path}"
         }
@@ -176,7 +183,11 @@ async def process_document_file(
     tags=["Video Processing"]
 )
 async def process_video_file(
-    blob_video_path: str = Form(..., description="Path to video in blob storage (e.g., Section1/Raw-data/Videos/filename.mp4)"),
+    course_id: str = Form(..., description="מזהה הקורס (למשל: CS101)"),
+    section_id: str = Form(..., description="מזהה הסקציה (למשל: Section1)"),
+    file_id: int = Form(..., description="מזהה הקובץ (למשל: 1)"),
+    video_name: str = Form(..., description="שם הוידאו (למשל: שיעור 1 - מבוא למתמטיקה דיסקרטית)"),
+    video_url: str = Form(..., description="נתיב הוידאו ב-blob storage (למשל: Section1/Raw-data/Videos/filename.mp4)"),
     merge_segments_duration: Optional[int] = Form(30, description="Duration in seconds for merging transcript segments")
 ):
     """
@@ -192,10 +203,15 @@ async def process_video_file(
     • Subject type classification ("הומני" or "מתמטי")
     • Short automatic lesson summary generation
     • Full transcript with precise timestamps
-    • Saves markdown to blob storage with folder structure preservation
+    • Saves markdown to blob storage with new structure: CourseID/SectionID/Videos_md/FileID.md
+    • Video name is included in the transcription
 
     **Parameters:**
-    - blob_video_path: Path to video in blob storage (e.g., "Section1/Raw-data/Videos/filename.mp4")
+    - course_id: Course identifier (e.g., "CS101")
+    - section_id: Section identifier (e.g., "Section1")
+    - file_id: File identifier (e.g., 1)
+    - video_name: Video name (will be included in transcription)
+    - video_url: Path to video in blob storage
     - merge_segments_duration: Duration in seconds for merging transcript segments (default: 30)
 
     **Returns:**
@@ -207,19 +223,17 @@ async def process_video_file(
     - Structured video data with all metadata
     """
     try:
-        # Process video from blob storage - function handles everything internally
-        result_blob_path = video_processor.process_video_to_md(blob_video_path, merge_segments_duration)
+        # Process video from blob storage with new parameters
+        result_blob_path = video_processor.process_video_to_md(course_id, section_id, file_id, video_name, video_url, merge_segments_duration)
 
         if not result_blob_path:
             raise HTTPException(status_code=500, detail="Error processing video")
 
-        filename = os.path.basename(blob_video_path)
-
         return {
             "message": f"Video processed successfully and saved to blob: {result_blob_path}",
-            "original_filename": filename,
+            "original_filename": video_name,
             "video_id": "processed",
-            "video_name": filename,
+            "video_name": video_name,
             "duration": "unknown",
             "transcript_segments": 0,
             "keywords": [],
@@ -232,6 +246,7 @@ async def process_video_file(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing video: {str(e)}")
+
 
 # ================================
 # 🗂️ INDEXING ENDPOINTS
@@ -492,7 +507,7 @@ if __name__ == "__main__":
     print("⏹️ Stop server: Ctrl+C")
 
     uvicorn.run(
-        "Main:app",
+        "main:app",
         host="localhost",
         port=8080,
         log_level="info",

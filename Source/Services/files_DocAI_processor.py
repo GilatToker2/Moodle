@@ -72,97 +72,89 @@ def process_document_from_memory(file_bytes: bytes) -> str | None:
         return None
 
 
-def document_to_markdown(blob_file_path: str) -> str | None:
+def document_to_markdown(course_id: str, section_id: str, file_id: int, document_name: str, document_url: str) -> str | None:
     """
     Streamlined: Downloads document from blob → processes in memory → uploads markdown.
     No temp files or disk I/O.
 
     Args:
-        blob_file_path: נתיב הקובץ ב-blob storage (למשל: "Section1/Raw-data/Docs/Ex5Sol.pdf")
+        course_id: מזהה הקורס
+        section_id: מזהה הסקציה
+        file_id: מזהה הקובץ
+        document_name: שם המסמך (ייכנס לתמלול)
+        document_url: נתיב הקובץ ב-blob storage (למשל: "Section1/Raw-data/Docs/Ex5Sol.pdf")
 
     Returns:
         נתיב הקובץ ב-blob storage או None אם נכשל
     """
-    # יצירת מנהל blob
-    blob_manager = BlobManager()
+    # יצירת מנהלי blob - אחד לקריאה מ-raw-data ואחד לכתיבה ל-processeddata
+    blob_manager_read = BlobManager(container_name="raw-data")
+    blob_manager_write = BlobManager(container_name="processeddata")
 
     # בדיקת סיומת הקובץ
     supported_extensions = {'.pdf', '.doc', '.docx', '.pptx', '.png', '.jpg', '.jpeg', '.tiff', '.bmp'}
-    file_ext = os.path.splitext(blob_file_path)[1].lower()
+    file_ext = os.path.splitext(document_url)[1].lower()
 
     if file_ext not in supported_extensions:
-        print(f"❌ סוג קובץ לא נתמך: {blob_file_path}")
+        print(f"❌ סוג קובץ לא נתמך: {document_url}")
         return None
 
-    # חילוץ מבנה התיקיות
-    # למשל: "Section1/Raw-data/Docs/Ex5Sol.pdf" -> "Section1"
-    path_parts = blob_file_path.split('/')
+    print(f"🌐 מוריד קובץ מקונטיינר raw-data: {document_url}")
 
-    # מחפש את האינדקס של "Raw-data"
-    try:
-        raw_data_index = path_parts.index("Raw-data")
-        # לוקח את כל החלקים לפני "Raw-data"
-        base_path = '/'.join(path_parts[:raw_data_index]) if raw_data_index > 0 else ""
-    except ValueError:
-        # אם אין "Raw-data" בנתיב, נשתמש בנתיב הבסיסי
-        base_path = ""
-
-    # קבלת שם הקובץ
-    filename = os.path.basename(blob_file_path)
-    base_name = os.path.splitext(filename)[0]
-
-    print(f"🌐 מוריד קובץ מ-blob לזיכרון: {blob_file_path}")
-
-    # Step 1: Download blob directly to memory
-    file_bytes = blob_manager.download_to_memory(blob_file_path)
+    # Step 1: Download blob directly to memory from raw-data container
+    file_bytes = blob_manager_read.download_to_memory(document_url)
     if not file_bytes:
-        print(f"❌ נכשלה הורדת הקובץ לזיכרון: {blob_file_path}")
+        print(f"❌ נכשלה הורדת הקובץ לזיכרון מקונטיינר raw-data: {document_url}")
         return None
 
-    print(f"🔄 מעבד קובץ בזיכרון: {filename}")
+    print(f"🔄 מעבד קובץ בזיכרון: {document_name}")
 
     # Step 2: Process document directly from memory
     md_content = process_document_from_memory(file_bytes)
     if not md_content:
-        print(f"❌ נכשל עיבוד הקובץ: {filename}")
+        print(f"❌ נכשל עיבוד הקובץ: {document_name}")
         return None
 
-    # Step 3: Upload markdown directly to blob storage
-    md_filename = f"{base_name}.md"
+    # הוספת שם המסמך לתחילת התמלול
+    enhanced_md_content = f"# {document_name}\n\n{md_content}"
 
-    if base_path:
-        target_blob_path = f"{base_path}/Processed-data/Docs_md/{md_filename}"
-    else:
-        target_blob_path = f"Processed-data/Docs_md/{md_filename}"
+    # Step 3: Upload markdown directly to processeddata container
+    # יצירת נתיב לפי המבנה: CourseID/SectionID/Docs_md/FileID.md
+    target_blob_path = f"{course_id}/{section_id}/Docs_md/{file_id}.md"
 
-    print(f"📤 מעלה markdown ל-blob: {target_blob_path}")
+    print(f"📤 מעלה markdown לקונטיינר processeddata: {target_blob_path}")
 
-    success = blob_manager.upload_text_to_blob(
-        text_content=md_content,
+    success = blob_manager_write.upload_text_to_blob(
+        text_content=enhanced_md_content,
         blob_name=target_blob_path
     )
 
     if success:
-        print(f"✅ הקובץ הועלה בהצלחה ל-blob: {target_blob_path}")
+        print(f"✅ הקובץ הועלה בהצלחה לקונטיינר processeddata: {target_blob_path}")
         return target_blob_path
     else:
-        print(f"❌ נכשלה העלאת הקובץ ל-blob storage")
+        print(f"❌ נכשלה העלאת הקובץ לקונטיינר processeddata")
         return None
 
 
 if __name__ == "__main__":
-    # Process a single document from blob storage with folder structure
-    # blob_file_path = "Section1/Raw-data/Docs/Ex5Sol.pdf"
-    blob_file_path = "Section1/Raw-data/Docs/bdida_tirgul_02.pdf"
+    # Process a single document from blob storage with new parameters
+    course_id = "CS101"
+    section_id = "Section1"
+    file_id = 1
+    document_name = "בדידה תרגול 02"
+    # document_url = "Section1/Raw-data/Docs/bdida_tirgul_02.pdf"
+    document_url = "bdida_tirgul_02.pdf"
 
-    print(f"🧪 מעבד קובץ: {blob_file_path}")
+    print(f"🧪 מעבד קובץ: {document_name}")
+    print(f"📍 CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
+    print(f"🔗 DocumentURL: {document_url}")
 
     # Process the document
-    result = document_to_markdown(blob_file_path)
+    result = document_to_markdown(course_id, section_id, file_id, document_name, document_url)
 
     if result:
         print(f"\n🎉 הקובץ עובד בהצלחה: {result}")
-        print(f"📁 הקובץ נשמר עם שמירה על מבנה התיקיות")
     else:
-        print(f"\n❌ נכשל עיבוד הקובץ: {blob_file_path}")
+        print(f"\n❌ נכשל עיבוד הקובץ: {document_name}")
 
