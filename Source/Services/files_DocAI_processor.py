@@ -144,6 +144,7 @@ if __name__ == "__main__":
     file_id = 1
     document_name = "בדידה תרגול 02"
     # document_url = "Section1/Raw-data/Docs/bdida_tirgul_02.pdf"
+    # document_url = "Section1/Raw-data/Docs/bdida_tirgul_02.pdf"
     document_url = "bdida_tirgul_02.pdf"
 
     print(f"🧪 מעבד קובץ: {document_name}")

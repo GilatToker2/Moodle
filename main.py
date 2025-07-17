@@ -22,7 +22,7 @@ import uvicorn
 from Source.Services.files_DocAI_processor import document_to_markdown
 from Source.Services.summarizer import ContentSummarizer
 from Source.Services.video_indexer_processor import VideoIndexerManager
-from Source.Services.unified_indexer import index_content_files
+from Source.Services.unified_indexer import index_content_files, UnifiedContentIndexer
 
 # Initialize FastAPI app
 app = FastAPI(title="Academic Content API", version="1.0.0")
@@ -92,6 +92,25 @@ class SummarizeSectionRequest(BaseModel):
 class SummarizeCourseRequest(BaseModel):
     full_blob_path: str
 
+class DeleteContentRequest(BaseModel):
+    source_id: str
+    content_type: Optional[str] = None
+
+class UpdateContentRequest(BaseModel):
+    blob_path: str
+    force_update: bool = False
+
+class DeleteContentResponse(BaseModel):
+    success: bool
+    deleted_count: int
+    source_id: str
+
+class UpdateContentResponse(BaseModel):
+    success: bool
+    source_id: str
+    old_chunks: int
+    new_chunks: int
+
 # ================================
 # 🏠 ROOT & HEALTH ENDPOINTS
 # ================================
@@ -107,6 +126,8 @@ async def root():
             "📄 /process/document - Convert documents to Markdown",
             "🎥 /process/video - Process videos with transcription",
             "🗂️ /index/content-files - Index files for search",
+            "🗑️ /index/delete-content - Delete content from search index",
+            "🔄 /index/update-content - Update content in search index",
             "📝 /summarize/md - Create summary from Markdown",
             "📚 /summarize/section - Create section summary",
             "🎓 /summarize/course - Create course summary"
@@ -328,7 +349,152 @@ async def index_content_files_endpoint(request: IndexRequest):
         raise HTTPException(status_code=500, detail=f"Error indexing files: {str(e)}")
 
 
+@app.post(
+    "/index/delete-content",
+    response_model=DeleteContentResponse,
+    responses={
+        404: {"model": ErrorResponse, "description": "Content not found"},
+        500: {"model": ErrorResponse, "description": "Delete operation failed"}
+    },
+    tags=["Indexing"]
+)
+async def delete_content_from_index(request: DeleteContentRequest):
+    """
+    🗑️ Delete Content from Search Index by Source ID
 
+    **Function Description:**
+    Removes all chunks related to a specific source (video or document) from the search index.
+
+    **Usage Instructions:**
+    1. **Provide Source ID**: The unique identifier of the content to delete
+    2. **Content Type (Optional)**: Specify 'video' or 'document' to limit deletion to specific type
+    3. **Safety**: All chunks belonging to the source will be permanently removed
+
+    **What the Function Does:**
+    • Searches for all chunks matching the source_id
+    • Removes all matching chunks from the search index
+    • Returns detailed deletion statistics
+
+    **Request Body Example:**
+    ```json
+    {
+        "source_id": "video_123",
+        "content_type": "video"
+    }
+    ```
+
+    **Use Cases:**
+    - Remove content that should no longer be searchable
+
+    **Returns:**
+    - success: Boolean indicating if the operation was successful
+    - deleted_count: Number of chunks that were deleted
+    - source_id: The source ID that was processed
+    """
+    try:
+        indexer = UnifiedContentIndexer()
+
+        # Perform deletion
+        result = indexer.delete_content_by_source(
+            source_id=request.source_id,
+            content_type=request.content_type
+        )
+
+        if result["success"]:
+            # Check if anything was actually deleted
+            deleted_count = result["deleted_count"]
+            if deleted_count > 0:
+                return DeleteContentResponse(
+                    success=True,
+                    deleted_count=deleted_count,
+                    source_id=request.source_id
+                )
+            else:
+                # No content was found to delete
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No content found for source_id: {request.source_id}"
+                )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("message", "Delete operation failed")
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting content: {str(e)}")
+
+
+@app.post(
+    "/index/update-content",
+    response_model=UpdateContentResponse,
+    responses={
+        404: {"model": ErrorResponse, "description": "Content file not found"},
+        500: {"model": ErrorResponse, "description": "Update operation failed"}
+    },
+    tags=["Indexing"]
+)
+async def update_content_in_index(request: UpdateContentRequest):
+    """
+    🔄 Update Content in Search Index
+
+    **Function Description:**
+    Updates existing content in the search index by removing the old version and adding the new version.
+
+    **Usage Instructions:**
+    1. **Provide Blob Path**: Path to the updated MD file in blob storage
+    2. **Force Update**: Set to true to add content even if it doesn't exist in index
+
+    **What the Function Does:**
+    • Identifies the source from the blob path
+    • Removes all existing chunks for that source
+    • Processes the updated file and creates new chunks
+    • Adds the new chunks to the search index
+    • Returns statistics about the update operation
+
+    **Request Body Example:**
+    ```json
+    {
+        "blob_path": "CS101/Section1/Videos_md/2.md",
+        "force_update": false
+    }
+    ```
+
+    **Use Cases:**
+    - Replace content with updated transcriptions or documents
+
+    **Returns:**
+    - success: Boolean indicating if the operation was successful
+    - source_id: The source ID that was updated
+    - old_chunks: Number of chunks in the previous version
+    - new_chunks: Number of chunks in the updated version
+    """
+    try:
+        indexer = UnifiedContentIndexer()
+
+        # Perform update
+        result = indexer.update_content_file(
+            blob_path=request.blob_path,
+            force_update=request.force_update
+        )
+
+        if result["success"]:
+            return UpdateContentResponse(
+                success=True,
+                source_id=result["source_id"],
+                old_chunks=result.get("old_chunks", 0),
+                new_chunks=result.get("new_chunks", 0)
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("message", "Update operation failed")
+            )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating content: {str(e)}")
 
 # ================================
 # 📝 SUMMARIZATION ENDPOINTS

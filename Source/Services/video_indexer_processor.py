@@ -203,6 +203,7 @@ class VideoIndexerManager:
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 400:
                 print(f"  ⚠️ יצירת סיכום GPT נכשלה (400 Bad Request)")
+                print(f"  ⚠️ יצירת סיכום GPT נכשלה (400 Bad Request)")
                 print(f"  📝 תגובה: {e.response.text}")
                 raise RuntimeError(f"סיכום GPT לא זמין: {e.response.text}")
             else:

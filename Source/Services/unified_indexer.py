@@ -331,6 +331,268 @@ class UnifiedContentIndexer:
             print(f"❌ Error getting stats: {e}")
             return {}
 
+    def delete_content_by_source(self, source_id: str, content_type: str = None) -> Dict:
+        """
+        מחיקת כל התוכן הקשור למקור מסוים (video או document) מהאינדקס
+
+        Args:
+            source_id: מזהה המקור (video_id או document_id)
+            content_type: סוג התוכן ('video' או 'document'). אם None, ימחק מכל הסוגים
+
+        Returns:
+            Dict עם פרטי המחיקה
+        """
+        try:
+            search_client = SearchClient(self.search_endpoint, self.index_name, self.credential)
+
+            # בניית פילטר לחיפוש
+            if content_type:
+                filter_query = f"source_id eq '{source_id}' and content_type eq '{content_type}'"
+            else:
+                filter_query = f"source_id eq '{source_id}'"
+
+            print(f"🔍 מחפש תוכן למחיקה: {filter_query}")
+
+            # חיפוש כל המסמכים הקשורים למקור
+            results = search_client.search(
+                search_text="*",
+                filter=filter_query,
+                select=["id", "source_name", "content_type", "chunk_index"],
+                include_total_count=True
+            )
+
+            # איסוף כל ה-IDs למחיקה
+            docs_to_delete = []
+            source_name = None
+            chunks_by_type = {"video": 0, "document": 0}
+
+            for result in results:
+                docs_to_delete.append({"id": result["id"]})
+                if not source_name:
+                    source_name = result.get("source_name", source_id)
+                chunks_by_type[result.get("content_type", "unknown")] += 1
+
+            total_found = results.get_count()
+
+            if not docs_to_delete:
+                print(f"⚠️ לא נמצא תוכן למחיקה עבור source_id: {source_id}")
+                return {
+                    "success": True,
+                    "deleted_count": 0,
+                    "source_id": source_id,
+                    "source_name": source_name or source_id,
+                    "message": "לא נמצא תוכן למחיקה"
+                }
+
+            print(f"🗑️ נמצאו {total_found} chunks למחיקה:")
+            print(f"  📄 Video chunks: {chunks_by_type['video']}")
+            print(f"  📝 Document chunks: {chunks_by_type['document']}")
+
+            # ביצוע המחיקה
+            delete_results = search_client.delete_documents(docs_to_delete)
+
+            # ספירת מחיקות מוצלחות
+            successful_deletes = sum(1 for r in delete_results if r.succeeded)
+            failed_deletes = len(delete_results) - successful_deletes
+
+            if failed_deletes > 0:
+                print(f"⚠️ {failed_deletes} מחיקות נכשלו")
+
+            print(f"✅ נמחקו בהצלחה {successful_deletes} chunks עבור {source_name}")
+
+            # עדכון סטטיסטיקות
+            self.get_stats()
+
+            return {
+                "success": True,
+                "deleted_count": successful_deletes,
+                "failed_count": failed_deletes,
+                "source_id": source_id,
+                "source_name": source_name or source_id,
+                "content_type": content_type,
+                "chunks_by_type": chunks_by_type,
+                "message": f"נמחקו {successful_deletes} chunks בהצלחה"
+            }
+
+        except Exception as e:
+            print(f"❌ שגיאה במחיקת תוכן: {e}")
+            return {
+                "success": False,
+                "deleted_count": 0,
+                "source_id": source_id,
+                "error": str(e),
+                "message": f"שגיאה במחיקה: {e}"
+            }
+
+    def update_content_file(self, blob_path: str, force_update: bool = False) -> Dict:
+        """
+        עדכון קובץ קיים באינדקס - מחיקת הגרסה הישנה והוספת הגרסה החדשה
+
+        Args:
+            blob_path: נתיב הקובץ ב-blob storage
+            force_update: אם True, יעדכן גם אם הקובץ לא קיים באינדקס
+
+        Returns:
+            Dict עם פרטי העדכון
+        """
+        try:
+            blob_manager = BlobManager()
+
+            # זיהוי סוג התוכן
+            content_type = _detect_content_type_from_path(blob_path)
+            print(f"🔄 מעדכן קובץ: {blob_path} (סוג: {content_type})")
+
+            # קריאת הקובץ החדש
+            if content_type == "video":
+                new_data = parse_video_md_from_blob(blob_path, blob_manager)
+                source_id = new_data.get("id", "unknown")
+            elif content_type == "document":
+                new_data = parse_document_md_from_blob(blob_path, blob_manager)
+                source_id = new_data.get("id", "unknown")
+            else:
+                return {
+                    "success": False,
+                    "error": f"סוג קובץ לא נתמך: {content_type}",
+                    "message": "עדכון נכשל - סוג קובץ לא נתמך"
+                }
+
+            # בדיקה אם הקובץ קיים באינדקס
+            search_client = SearchClient(self.search_endpoint, self.index_name, self.credential)
+            existing_results = search_client.search(
+                search_text="*",
+                filter=f"source_id eq '{source_id}' and content_type eq '{content_type}'",
+                include_total_count=True,
+                top=1
+            )
+
+            existing_count = existing_results.get_count()
+
+            if existing_count == 0 and not force_update:
+                print(f"⚠️ הקובץ {source_id} לא קיים באינדקס")
+                return {
+                    "success": False,
+                    "source_id": source_id,
+                    "message": "הקובץ לא קיים באינדקס. השתמש ב-force_update=True כדי להוסיף אותו"
+                }
+
+            # מחיקת הגרסה הישנה (אם קיימת)
+            if existing_count > 0:
+                print(f"🗑️ מוחק גרסה ישנה של {source_id} ({existing_count} chunks)")
+                delete_result = self.delete_content_by_source(source_id, content_type)
+                if not delete_result["success"]:
+                    return {
+                        "success": False,
+                        "source_id": source_id,
+                        "error": delete_result.get("error", "שגיאה במחיקה"),
+                        "message": "עדכון נכשל - לא ניתן למחוק גרסה ישנה"
+                    }
+
+            # הוספת הגרסה החדשה
+            print(f"➕ מוסיף גרסה חדשה של {source_id}")
+            index_result = index_content_files([blob_path], create_new_index=False)
+
+            # בדיקה אם ההוספה הצליחה
+            if "✅" in index_result:
+                # ספירת chunks חדשים
+                new_results = search_client.search(
+                    search_text="*",
+                    filter=f"source_id eq '{source_id}' and content_type eq '{content_type}'",
+                    include_total_count=True,
+                    top=1
+                )
+                new_count = new_results.get_count()
+
+                print(f"✅ עדכון הושלם בהצלחה עבור {source_id}")
+                print(f"  📊 Chunks חדשים: {new_count}")
+
+                return {
+                    "success": True,
+                    "source_id": source_id,
+                    "content_type": content_type,
+                    "old_chunks": existing_count,
+                    "new_chunks": new_count,
+                    "message": f"עדכון הושלם: {existing_count} → {new_count} chunks"
+                }
+            else:
+                return {
+                    "success": False,
+                    "source_id": source_id,
+                    "error": "שגיאה בהוספת תוכן חדש",
+                    "message": "עדכון נכשל - לא ניתן להוסיף תוכן חדש"
+                }
+
+        except Exception as e:
+            print(f"❌ שגיאה בעדכון קובץ: {e}")
+            return {
+                "success": False,
+                "source_id": source_id if 'source_id' in locals() else "unknown",
+                "error": str(e),
+                "message": f"עדכון נכשל: {e}"
+            }
+
+    def list_content_sources(self, content_type: str = None) -> Dict:
+        """
+        הצגת רשימת כל המקורות (sources) באינדקס
+
+        Args:
+            content_type: סוג התוכן לסינון ('video' או 'document'). אם None, יציג הכל
+
+        Returns:
+            Dict עם רשימת המקורות ופרטיהם
+        """
+        try:
+            search_client = SearchClient(self.search_endpoint, self.index_name, self.credential)
+
+            # בניית פילטר
+            if content_type:
+                filter_query = f"content_type eq '{content_type}'"
+            else:
+                filter_query = None
+
+            # חיפוש עם קיבוץ לפי source_id
+            results = search_client.search(
+                search_text="*",
+                filter=filter_query,
+                select=["source_id", "source_name", "content_type"],
+                facets=["source_id", "content_type"]
+            )
+
+            # איסוף מקורות ייחודיים
+            sources = {}
+            for result in results:
+                source_id = result.get("source_id")
+                if source_id not in sources:
+                    sources[source_id] = {
+                        "source_id": source_id,
+                        "source_name": result.get("source_name", source_id),
+                        "content_type": result.get("content_type", "unknown"),
+                        "chunk_count": 0
+                    }
+                sources[source_id]["chunk_count"] += 1
+
+            sources_list = list(sources.values())
+
+            print(f"📋 רשימת מקורות באינדקס:")
+            print(f"  📊 סה״כ מקורות: {len(sources_list)}")
+
+            for source in sources_list:
+                print(f"  🔹 {source['source_name']} ({source['content_type']}) - {source['chunk_count']} chunks")
+
+            return {
+                "success": True,
+                "sources": sources_list,
+                "total_sources": len(sources_list),
+                "content_type_filter": content_type
+            }
+
+        except Exception as e:
+            print(f"❌ שגיאה בהצגת מקורות: {e}")
+            return {
+                "success": False,
+                "sources": [],
+                "error": str(e)
+            }
+
 
 def _detect_content_type_from_path(blob_path: str) -> str:
     """
@@ -670,20 +932,94 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
 
 
 def main():
-    """Main function - demonstrates usage with automatic type detection"""
+    """Main function - demonstrates usage with automatic type detection and new functions"""
     print("🚀 Unified Content Indexer - Videos + Documents")
     print("=" * 60)
 
-    print("\n🎯 יצירת אינדקס מאוחד עם זיהוי אוטומטי של סוג הקובץ")
+    # print("\n🎯 יצירת אינדקס מאוחד עם זיהוי אוטומטי של סוג הקובץ")
+    #
+    # # Define blob paths to process - type will be auto-detected from path
+    # blob_paths = [
+    #     "CS101/Section1/Videos_md/2.md",
+    #     # "CS101/Section1/Docs_md/1.md",
+    # ]
+    #
+    # result = index_content_files(blob_paths, create_new_index=True)
+    # print(f"\n{result}")
 
-    # Define blob paths to process - type will be auto-detected from path
-    blob_paths = [
-        "CS101/Section1/Videos_md/2.md",
-        # "CS101/Section1/Docs_md/1.md",
-    ]
+    # בדיקת הפונקציות החדשות
+    print("\n" + "=" * 60)
+    print("🧪 בדיקת פונקציות מחיקה ועדכון חדשות")
+    print("=" * 60)
 
-    result = index_content_files(blob_paths, create_new_index=True)
-    print(f"\n{result}")
+    indexer = UnifiedContentIndexer()
+
+    # 1. הצגת סטטיסטיקות ראשוניות
+    print("\n📊 סטטיסטיקות ראשוניות:")
+    initial_stats = indexer.get_stats()
+
+    # 2. הצגת רשימת מקורות
+    print("\n📋 רשימת מקורות באינדקס:")
+    sources_result = indexer.list_content_sources()
+
+    if sources_result["success"] and sources_result["sources"]:
+        # 3. בדיקת מחיקה - נבחר מקור ראשון לבדיקה
+        first_source = sources_result["sources"][0]
+        source_id = first_source["source_id"]
+        content_type = first_source["content_type"]
+        source_name = first_source["source_name"]
+
+        print(f"\n🔍 פרטי המקור הראשון לבדיקה:")
+        print(f"  📋 source_id: {source_id}")
+        print(f"  📋 content_type: {content_type}")
+        print(f"  📋 source_name: {source_name}")
+        #
+        # print(f"\n🗑️ בדיקת מחיקה עבור מקור: {source_id} (סוג: {content_type})")
+        #
+        # # שמירת מספר chunks לפני מחיקה
+        # chunks_before = first_source["chunk_count"]
+        # print(f"  📄 Chunks לפני מחיקה: {chunks_before}")
+        #
+        # # ביצוע מחיקה
+        # delete_result = indexer.delete_content_by_source(source_id, content_type)
+        # print(f"  🔄 תוצאת מחיקה: {delete_result['message']}")
+        #
+        # # בדיקת סטטיסטיקות אחרי מחיקה
+        # print("\n📊 סטטיסטיקות אחרי מחיקה:")
+        # after_delete_stats = indexer.get_stats()
+
+        # # 4. בדיקת עדכון - נוסיף בחזרה את הקובץ שמחקנו
+        # print(f"\n🔄 בדיקת עדכון - החזרת הקובץ שנמחק")
+        #
+        # test_blob_path = "CS101/Section1/Docs_md/1.md"  # נתיב לדוגמה
+        #
+        # print(f"  📁 מנסה לעדכן קובץ: {test_blob_path}")
+        # update_result = indexer.update_content_file(test_blob_path, force_update=False)
+        # print(f"  🔄 תוצאת עדכון: {update_result['message']}")
+        #
+        # # בדיקת סטטיסטיקות סופיות
+        # print("\n📊 סטטיסטיקות סופיות:")
+        # final_stats = indexer.get_stats()
+
+        # # סיכום הבדיקה
+        # print("\n✅ סיכום בדיקת הפונקציות החדשות:")
+        # print(f"  📄 Chunks התחלתיים: {initial_stats.get('total_chunks', 0)}")
+        # print(f"  📄 Chunks אחרי מחיקה: {after_delete_stats.get('total_chunks', 0)}")
+        # print(f"  📄 Chunks סופיים: {final_stats.get('total_chunks', 0)}")
+        #
+        # if delete_result["success"]:
+        #     print("  ✅ פונקציית מחיקה עובדת תקין")
+        # else:
+        #     print("  ❌ פונקציית מחיקה נכשלה")
+
+        # if update_result["success"]:
+        #     print("  ✅ פונקציית עדכון עובדת תקין")
+        # else:
+        #     print("  ❌ פונקציית עדכון נכשלה")
+
+    else:
+        print("⚠️ לא נמצאו מקורות באינדקס לבדיקה")
+        print("💡 הרץ קודם את הפונקציה index_content_files כדי להוסיף תוכן לאינדקס")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ class BlobManager:
         self.container_name = container_name if container_name is not None else CONTAINER_NAME
 
         # מיפוי סוגי קבצים ל-content types
+        # מיפוי סוגי קבצים ל-content types
         self.content_types = {
             '.mp4': 'video/mp4',
             '.avi': 'video/x-msvideo',
