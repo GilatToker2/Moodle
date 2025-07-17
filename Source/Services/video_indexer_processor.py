@@ -330,7 +330,7 @@ class VideoIndexerManager:
 
         # מטא-דאטה
         md_content.append("## 📊 פרטי הוידאו")
-        md_content.append(f"- **מזהה וידאו**: {structured_data.get('video_id', 'לא זמין')}")
+        md_content.append(f"- **מזהה וידאו**: {structured_data.get('id', 'לא זמין')}")
         md_content.append(f"- **משך זמן**: {structured_data.get('duration', 'לא זמין')}")
         md_content.append(f"- **שפה**: {structured_data.get('language', 'לא זמין')}")
         md_content.append(f"- **דוברים**: {', '.join(structured_data.get('speakers', []))}")
@@ -473,8 +473,8 @@ class VideoIndexerManager:
 
             # יצירת מבנה נתונים מובנה עם שם הוידאו
             structured_data = {
-                "id": video_id,
-                "name": video_name,  # שימוש בשם שהועבר במקום שם הקובץ
+                "id": str(file_id),  # שימוש ב-file_id כמזהה במקום video_id
+                "name": video_name,  # שימוש בשם שהועבר
                 **metadata,
                 "transcript_segments": transcript_segments,
                 "full_transcript": " ".join([seg["text"] for seg in transcript_segments]),
@@ -531,7 +531,7 @@ if __name__ == "__main__":
 
     try:
         manager = VideoIndexerManager()
-        result = manager.process_video_to_md(course_id, section_id, file_id, video_name, video_url, merge_segments_duration=30)
+        result = manager.process_video_to_md(course_id, section_id, file_id, video_name, video_url, merge_segments_duration=10)
 
         if result:
             print(f"\n🎉 הוידאו עובד בהצלחה: {result}")
@@ -541,4 +541,3 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"❌ שגיאה בעיבוד הוידאו: {e}")
-

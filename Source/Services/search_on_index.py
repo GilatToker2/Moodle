@@ -86,7 +86,7 @@ class AdvancedUnifiedContentSearch:
 
                 # הצגת דוגמאות למסמכים
                 print(f"\n📄 דוגמאות למסמכים באינדקס:")
-                for i, doc in enumerate(docs[:3], 1):
+                for i, doc in enumerate(docs[:10], 1):
                     content_type = doc.get('content_type', 'unknown')
                     print(f"\n📄 מסמך {i} ({content_type}):")
                     print(f"  🆔 ID: {doc.get('id', 'N/A')}")
@@ -611,7 +611,7 @@ def run_unified_search_demo():
             print(f"\n4️⃣ חיפוש בוידאו ספציפי:")
             print("-" * 40)
             # נניח שיש לנו וידאו עם ID זה (תצטרך להחליף לID אמיתי)
-            sample_video_id = "ghz3r7c625"
+            sample_video_id = "2"
             print(f"🎯 חיפוש בוידאו: {sample_video_id}")
             search_system.semantic_search(query, top_k=2, content_type="video", source_id=sample_video_id)
 

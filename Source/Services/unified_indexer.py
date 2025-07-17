@@ -936,90 +936,86 @@ def main():
     print("🚀 Unified Content Indexer - Videos + Documents")
     print("=" * 60)
 
-    # print("\n🎯 יצירת אינדקס מאוחד עם זיהוי אוטומטי של סוג הקובץ")
+    print("\n🎯 יצירת אינדקס מאוחד עם זיהוי אוטומטי של סוג הקובץ")
+
+    # Define blob paths to process - type will be auto-detected from path
+    blob_paths = [
+        "CS101/Section1/Docs_md/1.md",
+        "CS101/Section1/Videos_md/2.md"
+    ]
+
+    result = index_content_files(blob_paths, create_new_index=True)
+    print(f"\n{result}")
+
+    # # בדיקת הפונקציות החדשות
+    # print("\n" + "=" * 60)
+    # print("🧪 בדיקת פונקציות מחיקה ועדכון חדשות")
+    # print("=" * 60)
     #
-    # # Define blob paths to process - type will be auto-detected from path
-    # blob_paths = [
-    #     "CS101/Section1/Videos_md/2.md",
-    #     # "CS101/Section1/Docs_md/1.md",
-    # ]
+    # indexer = UnifiedContentIndexer()
     #
-    # result = index_content_files(blob_paths, create_new_index=True)
-    # print(f"\n{result}")
+    # # 1. הצגת סטטיסטיקות ראשוניות
+    # print("\n📊 סטטיסטיקות ראשוניות:")
+    # initial_stats = indexer.get_stats()
+    #
+    # # 2. הצגת רשימת מקורות
+    # print("\n📋 רשימת מקורות באינדקס:")
+    # sources_result = indexer.list_content_sources()
+    #
+    # if sources_result["success"] and sources_result["sources"]:
+    #     # 3. בדיקת מחיקה - נבחר מקור ראשון לבדיקה
+    #     source_id = "2"
+    #     content_type = "video"
+    #
+    #     print(f"\n🔍 פרטי המקור הראשון לבדיקה:")
+    #     print(f"  📋 source_id: {source_id}")
+    #     print(f"  📋 content_type: {content_type}")
+    #
+    #     print(f"\n🗑️ בדיקת מחיקה עבור מקור: {source_id} (סוג: {content_type})")
+    #
+    #     # ביצוע מחיקה ישירות
+    #     print(f"  📄 מוחק סרטון עם ID 2...")
+    #
+    #     # ביצוע מחיקה
+    #     delete_result = indexer.delete_content_by_source(source_id, content_type)
+    #     print(f"  🔄 תוצאת מחיקה: {delete_result['message']}")
+    #
+    #     # בדיקת סטטיסטיקות אחרי מחיקה
+    #     print("\n📊 סטטיסטיקות אחרי מחיקה:")
+    #     after_delete_stats = indexer.get_stats()
 
-    # בדיקת הפונקציות החדשות
-    print("\n" + "=" * 60)
-    print("🧪 בדיקת פונקציות מחיקה ועדכון חדשות")
-    print("=" * 60)
-
-    indexer = UnifiedContentIndexer()
-
-    # 1. הצגת סטטיסטיקות ראשוניות
-    print("\n📊 סטטיסטיקות ראשוניות:")
-    initial_stats = indexer.get_stats()
-
-    # 2. הצגת רשימת מקורות
-    print("\n📋 רשימת מקורות באינדקס:")
-    sources_result = indexer.list_content_sources()
-
-    if sources_result["success"] and sources_result["sources"]:
-        # 3. בדיקת מחיקה - נבחר מקור ראשון לבדיקה
-        first_source = sources_result["sources"][0]
-        source_id = first_source["source_id"]
-        content_type = first_source["content_type"]
-        source_name = first_source["source_name"]
-
-        print(f"\n🔍 פרטי המקור הראשון לבדיקה:")
-        print(f"  📋 source_id: {source_id}")
-        print(f"  📋 content_type: {content_type}")
-        print(f"  📋 source_name: {source_name}")
-        #
-        # print(f"\n🗑️ בדיקת מחיקה עבור מקור: {source_id} (סוג: {content_type})")
-        #
-        # # שמירת מספר chunks לפני מחיקה
-        # chunks_before = first_source["chunk_count"]
-        # print(f"  📄 Chunks לפני מחיקה: {chunks_before}")
-        #
-        # # ביצוע מחיקה
-        # delete_result = indexer.delete_content_by_source(source_id, content_type)
-        # print(f"  🔄 תוצאת מחיקה: {delete_result['message']}")
-        #
-        # # בדיקת סטטיסטיקות אחרי מחיקה
-        # print("\n📊 סטטיסטיקות אחרי מחיקה:")
-        # after_delete_stats = indexer.get_stats()
-
-        # # 4. בדיקת עדכון - נוסיף בחזרה את הקובץ שמחקנו
-        # print(f"\n🔄 בדיקת עדכון - החזרת הקובץ שנמחק")
-        #
-        # test_blob_path = "CS101/Section1/Docs_md/1.md"  # נתיב לדוגמה
-        #
-        # print(f"  📁 מנסה לעדכן קובץ: {test_blob_path}")
-        # update_result = indexer.update_content_file(test_blob_path, force_update=False)
-        # print(f"  🔄 תוצאת עדכון: {update_result['message']}")
-        #
-        # # בדיקת סטטיסטיקות סופיות
-        # print("\n📊 סטטיסטיקות סופיות:")
-        # final_stats = indexer.get_stats()
-
-        # # סיכום הבדיקה
-        # print("\n✅ סיכום בדיקת הפונקציות החדשות:")
-        # print(f"  📄 Chunks התחלתיים: {initial_stats.get('total_chunks', 0)}")
-        # print(f"  📄 Chunks אחרי מחיקה: {after_delete_stats.get('total_chunks', 0)}")
-        # print(f"  📄 Chunks סופיים: {final_stats.get('total_chunks', 0)}")
-        #
-        # if delete_result["success"]:
-        #     print("  ✅ פונקציית מחיקה עובדת תקין")
-        # else:
-        #     print("  ❌ פונקציית מחיקה נכשלה")
-
-        # if update_result["success"]:
-        #     print("  ✅ פונקציית עדכון עובדת תקין")
-        # else:
-        #     print("  ❌ פונקציית עדכון נכשלה")
-
-    else:
-        print("⚠️ לא נמצאו מקורות באינדקס לבדיקה")
-        print("💡 הרץ קודם את הפונקציה index_content_files כדי להוסיף תוכן לאינדקס")
+    #     # # 4. בדיקת עדכון - נוסיף בחזרה את הקובץ שמחקנו
+    #     # print(f"\n🔄 בדיקת עדכון - החזרת הקובץ שנמחק")
+    #     #
+    #     # test_blob_path = "CS101/Section1/Docs_md/1.md"  # נתיב לדוגמה
+    #     #
+    #     # print(f"  📁 מנסה לעדכן קובץ: {test_blob_path}")
+    #     # update_result = indexer.update_content_file(test_blob_path, force_update=False)
+    #     # print(f"  🔄 תוצאת עדכון: {update_result['message']}")
+    #     #
+    #     # # בדיקת סטטיסטיקות סופיות
+    #     # print("\n📊 סטטיסטיקות סופיות:")
+    #     # final_stats = indexer.get_stats()
+    #
+    #     # # סיכום הבדיקה
+    #     # print("\n✅ סיכום בדיקת הפונקציות החדשות:")
+    #     # print(f"  📄 Chunks התחלתיים: {initial_stats.get('total_chunks', 0)}")
+    #     # print(f"  📄 Chunks אחרי מחיקה: {after_delete_stats.get('total_chunks', 0)}")
+    #     # print(f"  📄 Chunks סופיים: {final_stats.get('total_chunks', 0)}")
+    #     #
+    #     # if delete_result["success"]:
+    #     #     print("  ✅ פונקציית מחיקה עובדת תקין")
+    #     # else:
+    #     #     print("  ❌ פונקציית מחיקה נכשלה")
+    #
+    #     # if update_result["success"]:
+    #     #     print("  ✅ פונקציית עדכון עובדת תקין")
+    #     # else:
+    #     #     print("  ❌ פונקציית עדכון נכשלה")
+    #
+    # else:
+    #     print("⚠️ לא נמצאו מקורות באינדקס לבדיקה")
+    #     print("💡 הרץ קודם את הפונקציה index_content_files כדי להוסיף תוכן לאינדקס")
 
 
 if __name__ == "__main__":
