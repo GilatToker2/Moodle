@@ -140,11 +140,27 @@ class ContentSummarizer:
 המסמך:
 """
 
-    def _get_section_summary_prompt(self) -> str:
+    def _get_section_summary_prompt(self, has_previous_context: bool = False) -> str:
         """הכנת prompt לסיכום Section שלם"""
-        return """אתה מומחה לסיכום חומרי לימוד אקדמיים. קיבלת אוסף של סיכומים כתובים (Markdown) מתוך Section שלם בקורס אוניברסיטאי.
+
+        base_prompt = """אתה מומחה לסיכום חומרי לימוד אקדמיים. קיבלת אוסף של סיכומים כתובים (Markdown) מתוך Section שלם בקורס אוניברסיטאי.
     כל סיכום מייצג שיעור, מסמך או תרגול שנלמדו באותו Section.  
-    המטרה שלך היא לאחד את כל הסיכומים לכדי סיכום-על **מפורט**, מקיף ופדגוגי שמציג את התמונה הכוללת של ה-Section.
+    המטרה שלך היא לאחד את כל הסיכומים לכדי סיכום-על **מפורט**, מקיף ופדגוגי שמציג את התמונה הכוללת של ה-Section."""
+
+        if has_previous_context:
+            context_addition = """
+
+    **הקשר קודם חשוב**: קיבלת גם סיכומים של ה-Sections הקודמים כדי להבין את ההקשר והרצף הלימודי. השתמש במידע הזה כדי:
+    - להבין איך ה-Section הנוכחי מתחבר למה שנלמד קודם
+    - לזהות המשכיות ברעיונות ובמושגים
+    - להדגיש איך הידע מתפתח ונבנה על בסיס מה שכבר נלמד
+    - לציין קשרים לחומר קודם כשזה רלוונטי
+
+    אל תסכם את ה-Sections הקודמים - הם כאן רק לקונטקסט. התמקד ב-Section הנוכחי אבל השתמש בהקשר הקודם כדי להעשיר את ההסבר."""
+        else:
+            context_addition = ""
+
+        main_content = """
 
     זכור: המטרה שלך **אינה לקצר** את החומר אלא לארגן אותו מחדש, להרחיב ולהסביר כך שהסטודנט יוכל ללמוד את כל החומר מתוך הסיכום הסופי **ללא תלות בחומרים המקוריים**. אל תחסוך בפרטים — ציין הגדרות, דוגמאות, הסברים והערות חשובות שהיו בפירוטי הקבצים שניתנו.
 
@@ -170,10 +186,20 @@ class ContentSummarizer:
     זכור:
     - שמור על מבנה מסודר והגיוני שמקל על הבנה.
     - כתוב בצורה ברורה, נגישה ומלווה — כאילו אתה מדריך את הסטודנט שלב אחר שלב.
-    - אל תדלג על פרטים חשובים — המטרה היא סיכום שלם ומקיף.
+    - אל תדלג על פרטים חשובים — המטרה היא סיכום שלם ומקיף."""
+
+        if has_previous_context:
+            ending = """
+
+    תחילה יוצגו סיכומי ה-Sections הקודמים (לקונטקסט בלבד), ואחר כך סיכומי מסמכים מה-Section הנוכחי:
+    """
+        else:
+            ending = """
 
     סיכומי כל הקבצים:
     """
+        return base_prompt + context_addition + main_content + ending
+
 
     def _get_course_summary_prompt(self) -> str:
         """הכנת prompt לסיכום קורס שלם"""
@@ -561,11 +587,12 @@ class ContentSummarizer:
             print(f"❌ Error saving summary to blob: {str(e)}")
             return None
 
-    def summarize_section_from_blob(self, full_blob_path: str) -> str | None:
+    def summarize_section_from_blob(self, full_blob_path: str, previous_sections: list = None) -> str | None:
         """
         סיכום section שלם מכל קבצי הסיכומים ב-blob storage
         Args:
             full_blob_path: נתיב לתיקיית file_summaries (למשל: "CS101/Section1/file_summaries")
+            previous_sections: רשימה אופציונלית של נתיבים לסיכומי ה-sections הקודמים לקונטקסט
         Returns:
             נתיב הסיכום בבלוב או None אם נכשל
         """
@@ -644,8 +671,51 @@ class ContentSummarizer:
             # יצירת הסיכום
             print(f"\n🤖 יוצר סיכום section...")
 
+            # בדיקה אם יש sections קודמים לקונטקסט
+            has_previous_context = bool(previous_sections)
+
             # הכנת prompt מיוחד לסיכום section
-            system_prompt = self._get_section_summary_prompt()
+            system_prompt = self._get_section_summary_prompt(has_previous_context)
+
+            # הכנת התוכן - מתחילים עם קונטקסט קודם אם קיים
+            final_content = ""
+
+            if previous_sections:
+                print(f"📚 מוסיף קונטקסט של {len(previous_sections)} sections קודמים...")
+
+                # הורדת סיכומי הsections הקודמים
+                for i, prev_section_path in enumerate(previous_sections, 1):
+                    try:
+                        print(f"  📥 מוריד section קודם {i}: {prev_section_path}")
+                        prev_bytes = blob_manager.download_to_memory(prev_section_path)
+
+                        if prev_bytes:
+                            prev_text = prev_bytes.decode('utf-8')
+                            if prev_text.strip():
+                                final_content += f"\n\n{'=' * 60}\n"
+                                final_content += f"SECTION קודם {i}: {os.path.basename(prev_section_path)}\n"
+                                final_content += f"{'=' * 60}\n\n"
+                                final_content += prev_text
+                                print(f"    ✅ נוסף בהצלחה: {len(prev_text)} תווים")
+                            else:
+                                print(f"    ⚠️ Section קודם ריק: {prev_section_path}")
+                        else:
+                            print(f"    ❌ נכשלה הורדת section קודם: {prev_section_path}")
+                    except Exception as e:
+                        print(f"    ❌ שגיאה בהורדת section קודם {prev_section_path}: {e}")
+                        continue
+
+                # הוספת מפריד בין הקונטקסט הקודם לsection הנוכחי
+                final_content += f"\n\n{'=' * 80}\n"
+                final_content += f"SECTION הנוכחי - זה מה שצריך לסכם:\n"
+                final_content += f"{'=' * 80}\n\n"
+
+                print(f"📊 אורך קונטקסט קודם: {len(final_content)} תווים")
+
+            # הוספת התוכן של הsection הנוכחי
+            final_content += all_content
+
+            print(f"📊 אורך התוכן הכולל: {len(final_content)} תווים")
 
             messages = [
                 {
@@ -654,9 +724,21 @@ class ContentSummarizer:
                 },
                 {
                     "role": "user",
-                    "content": all_content
+                    "content": final_content
                 }
             ]
+
+            # הדפסת הprompt המלא
+            print(f"\n{'='*100}")
+            print(f"📋 FULL PROMPT - SYSTEM MESSAGE:")
+            print(f"{'='*100}")
+            print(system_prompt)
+            print(f"\n{'='*100}")
+            print(f"📋 FULL PROMPT - USER MESSAGE :")
+            print(f"{'='*100}")
+            print(final_content)
+            print(f"\n📊 Total user content length: {len(final_content)} characters")
+            print(f"{'='*100}")
 
             # קריאה למודל השפה
             response = self.openai_client.chat.completions.create(
@@ -915,57 +997,64 @@ def main():
     #     time.sleep(2)
 
 
-    # # בדיקת הפונקציה summarize_section_from_blob
-    # print("\n🔄 Testing summarize_section_from_blob...")
-    #
-    # # נתיב מלא בבלוב
-    # full_blob_path = "CS101/Section1/file_summaries"
-    #
-    #
-    # print(f"📂 Testing full blob path: {full_blob_path}")
-    #
-    # try:
-    #     # יצירת סיכום section
-    #     result = summarizer.summarize_section_from_blob(full_blob_path)
-    #
-    #     if result:
-    #         print(f"\n✅ Section summary created successfully!")
-    #         print(f"📤 Summary saved to blob: {result}")
-    #         print(f"🎉 Test completed successfully!")
-    #     else:
-    #         print(f"\n❌ Failed to create section summary")
-    #         print(f"💡 Check if there are summary files in {full_blob_path}")
-    #
-    # except Exception as e:
-    #     print(f"\n❌ Error during section summarization: {str(e)}")
-    #     traceback.print_exc()
+    # בדיקת הפונקציה summarize_section_from_blob
+    print("\n🔄 Testing summarize_section_from_blob...")
+
+    # נתיב מלא בבלוב
+    full_blob_path = "CS101/Section2/file_summaries"
 
 
-    # בדיקת הפונקציה summarize_course_from_blob
-    print("\n🔄 Testing summarize_course_from_blob...")
-
-    # נתיב מלא לתיקיית סיכומי ה-sections
-    full_blob_path = "CS101/section_summaries"
-
-    print(f"📂 Testing course summary from path: {full_blob_path}")
+    print(f"📂 Testing full blob path: {full_blob_path}")
 
     try:
-        # יצירת סיכום קורס שלם
-        result = summarizer.summarize_course_from_blob(full_blob_path)
+        # יצירת סיכום section
+        previous_sections = ["CS101/section_summaries/Section1.md"]
+        result = summarizer.summarize_section_from_blob(full_blob_path, previous_sections)
 
         if result:
-            print(f"\n✅ Course summary created successfully!")
+            print(f"\n✅ Section summary created successfully!")
             print(f"📤 Summary saved to blob: {result}")
             print(f"🎉 Test completed successfully!")
         else:
-            print(f"\n❌ Failed to create course summary")
-            print(f"💡 Check if there are section summary files in {full_blob_path}")
+            print(f"\n❌ Failed to create section summary")
+            print(f"💡 Check if there are summary files in {full_blob_path}")
 
     except Exception as e:
-        print(f"\n❌ Error during course summarization: {str(e)}")
+        print(f"\n❌ Error during section summarization: {str(e)}")
         traceback.print_exc()
+
+
+    # # בדיקת הפונקציה summarize_course_from_blob
+    # print("\n🔄 Testing summarize_course_from_blob...")
+    #
+    # # נתיב מלא לתיקיית סיכומי ה-sections
+    # full_blob_path = "CS101/section_summaries"
+    #
+    # print(f"📂 Testing course summary from path: {full_blob_path}")
+    #
+    # try:
+    #     # יצירת סיכום קורס שלם
+    #     result = summarizer.summarize_course_from_blob(full_blob_path)
+    #
+    #     if result:
+    #         print(f"\n✅ Course summary created successfully!")
+    #         print(f"📤 Summary saved to blob: {result}")
+    #         print(f"🎉 Test completed successfully!")
+    #     else:
+    #         print(f"\n❌ Failed to create course summary")
+    #         print(f"💡 Check if there are section summary files in {full_blob_path}")
+    #
+    # except Exception as e:
+    #     print(f"\n❌ Error during course summarization: {str(e)}")
+    #     traceback.print_exc()
 
     print(f"\n🎉 Testing completed!")
 
 if __name__ == "__main__":
     main()
+    # Adding in the prompt reference to previous summary section.
+    # I think implement it by giving a course name and running on all current files.
+    # We need to improve the prompt structure
+
+    # We also want to add course_type (math/humanity)
+
