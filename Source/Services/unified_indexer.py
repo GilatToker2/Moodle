@@ -221,18 +221,126 @@ class UnifiedContentIndexer:
 
         return embeddings
 
-    def chunk_by_tokens(self, text: str, max_tokens: int = 2000) -> List[str]:
-        """Split text by tokens"""
-        tokens = self.tokenizer.encode(text)
+    def detect_sentence_endings(self, text: str) -> List[str]:
+        """
+        זיהוי סוף משפטים - פונקציה שמזהה סוף משפט
+        כל משפט יהיה chunk בסיסי
+        """
 
-        if len(tokens) <= max_tokens:
-            return [text]
+        # ביטוי רגולרי מתקדם לזיהוי סוף משפטים בעברית ואנגלית
+        sentence_patterns = [
+            r'[.!?]+\s+',  # נקודה/קריאה/שאלה + רווח
+            r'[.!?]+$',  # נקודה/קריאה/שאלה בסוף השורה
+            r'\n\s*\n',  # שורה ריקה (מפריד פסקאות)
+            r'[.!?]+\s*\n',  # נקודה + שורה חדשה
+        ]
+
+        sentence_regex = re.compile('|'.join(sentence_patterns), re.MULTILINE)
+
+        sentences = []
+        last_end = 0
+
+        for match in sentence_regex.finditer(text):
+            sentence = text[last_end:match.end()].strip()
+            if sentence and len(sentence) > 10:  # סינון משפטים קצרים מדי
+                sentences.append(sentence)
+            last_end = match.end()
+
+        # הוספת החלק האחרון אם קיים
+        if last_end < len(text):
+            remaining = text[last_end:].strip()
+            if remaining and len(remaining) > 10:
+                sentences.append(remaining)
+
+        return sentences
+
+    def merge_sentences_by_length(self, sentences: List[str], max_length) -> List[Dict]:
+        """
+        איחוד משפטים לחתיכות לפי גודל רצוי
+        כמו ב-Video Indexer שמאחד segments לפי זמן
+        """
+
+        if not sentences:
+            return []
 
         chunks = []
-        for i in range(0, len(tokens), max_tokens):
-            chunk_tokens = tokens[i:i + max_tokens]
-            chunk_text = self.tokenizer.decode(chunk_tokens, errors="replace")
-            chunks.append(chunk_text)
+        current_chunk = {
+            "sentences": [],
+            "text": "",
+            "sentence_count": 0,
+            "character_count": 0
+        }
+
+        for i, sentence in enumerate(sentences):
+            # בדיקה אם הוספת המשפט תחרוג מהמקסימום
+            potential_text = current_chunk["text"] + (" " if current_chunk["text"] else "") + sentence
+            potential_length = len(potential_text)
+
+            if potential_length <= max_length or current_chunk["sentence_count"] == 0:
+                # הוספת המשפט לחתיכה הנוכחית
+                current_chunk["sentences"].append(sentence)
+                current_chunk["text"] = potential_text
+                current_chunk["sentence_count"] += 1
+                current_chunk["character_count"] = potential_length
+
+            else:
+                # החתיכה הנוכחית מלאה - נסיים אותה ונתחיל חדשה
+                if current_chunk["sentences"]:
+                    chunk_info = {
+                        "text": current_chunk["text"],
+                        "sentence_count": current_chunk["sentence_count"],
+                        "character_count": current_chunk["character_count"],
+                        "chunk_index": len(chunks)
+                    }
+                    chunks.append(chunk_info)
+
+                    # התחלת חתיכה חדשה
+                current_chunk = {
+                    "sentences": [sentence],
+                    "text": sentence,
+                    "sentence_count": 1,
+                    "character_count": len(sentence)
+                }
+
+        # הוספת החתיכה האחרונה
+        if current_chunk["sentences"]:
+            chunk_info = {
+                "text": current_chunk["text"],
+                "sentence_count": current_chunk["sentence_count"],
+                "character_count": current_chunk["character_count"],
+                "chunk_index": len(chunks)
+            }
+            chunks.append(chunk_info)
+        return chunks
+
+    def sentence_based_chunking(self, text: str, max_chunk_length) -> List[Dict]:
+        """
+        חלוקה מבוססת משפטים - הפונקציה הראשית
+        קודם בודק אם הטקסט בגודל טבעי, ורק אם חורג אז מחלק למשפטים
+        """
+
+        # בדיקה ראשונה: האם הטקסט בגודל טבעי?
+        if len(text) <= max_chunk_length:
+            return [{
+                "text": text,
+                "sentence_count": 1,  # נחשב כמשפט אחד
+                "character_count": len(text),
+                "chunk_index": 0
+            }]
+
+        # שלב 1: זיהוי משפטים
+        sentences = self.detect_sentence_endings(text)
+
+        if not sentences:
+            return [{
+                "text": text,
+                "sentence_count": 1,
+                "character_count": len(text),
+                "chunk_index": 0
+            }]
+
+        # שלב 2: איחוד משפטים לחתיכות
+        chunks = self.merge_sentences_by_length(sentences, max_chunk_length)
 
         return chunks
 
@@ -246,55 +354,28 @@ class UnifiedContentIndexer:
             if not text:
                 continue
 
-            # Check if segment needs chunking
-            token_count = len(self.tokenizer.encode(text))
+            # Segment is fine as is - use the calculated end_time from parsing
+            end_seconds = segment.get("end_seconds", 0.0)
+            end_time_formatted = convert_seconds_to_timestamp(end_seconds)
 
-            if token_count <= 2000:
-                # Segment is fine as is - use the calculated end_time from parsing
-                end_seconds = segment.get("end_seconds", 0.0)
-                end_time_formatted = convert_seconds_to_timestamp(end_seconds)
-
-                chunk = {
-                    "text": text,
-                    "chunk_index": chunk_idx,
-                    "start_time": segment.get("start_time", "00:00:00"),
-                    "end_time": end_time_formatted
-                }
-                chunks.append(chunk)
-                chunk_idx += 1
-            else:
-                # Split large segment
-                print(f"  📝 Splitting video segment ({token_count} tokens)")
-                text_chunks = self.chunk_by_tokens(text)
-
-                start_time = segment.get("start_time", "00:00:00")
-                start_seconds = segment.get("start_seconds", 0.0)
-                end_seconds = segment.get("end_seconds", start_seconds + 5.0)
-                duration = end_seconds - start_seconds
-                duration_per_chunk = duration / len(text_chunks) if len(text_chunks) > 0 else 2.0
-
-                for i, chunk_text in enumerate(text_chunks):
-                    chunk_start_seconds = start_seconds + (i * duration_per_chunk)
-                    chunk_end_seconds = chunk_start_seconds + duration_per_chunk
-                    chunk_end_time_formatted = convert_seconds_to_timestamp(chunk_end_seconds)
-
-                    chunk = {
-                        "text": chunk_text,
-                        "chunk_index": chunk_idx,
-                        "start_time": start_time,
-                        "end_time": chunk_end_time_formatted
-                    }
-                    chunks.append(chunk)
-                    chunk_idx += 1
-
+            chunk = {
+                "text": text,
+                "chunk_index": chunk_idx,
+                "start_time": segment.get("start_time", "00:00:00"),
+                "end_time": end_time_formatted
+            }
+            chunks.append(chunk)
+            chunk_idx += 1
         return chunks
 
     def _process_document_to_chunks(self, markdown_content: str) -> List[Dict]:
-        """Convert document markdown to searchable chunks"""
+        """Convert document markdown to searchable chunks using sentence-based chunking"""
+        print("📄 מעבד מסמך עם חלוקה מבוססת משפטים")
+
         # Split by headers to preserve sections
         sections = re.split(r'\n#+\s+', markdown_content)
-        chunks = []
-        chunk_idx = 0
+        all_chunks = []
+        global_chunk_idx = 0
 
         for i, section in enumerate(sections):
             if not section.strip():
@@ -313,31 +394,20 @@ class UnifiedContentIndexer:
             if not section_body:
                 continue
 
-            # Check if section needs chunking
-            token_count = len(self.tokenizer.encode(section_body))
+            # Use sentence-based chunking for this section
+            section_chunks = self.sentence_based_chunking(section_body, max_chunk_length=500)
 
-            if token_count <= 2000:
-                # Section is fine as is
-                chunks.append({
-                    "text": section_body,
-                    "chunk_index": chunk_idx,
+            # Add metadata to each chunk
+            for chunk in section_chunks:
+                chunk.update({
+                    "chunk_index": global_chunk_idx,
                     "section_title": section_title
                 })
-                chunk_idx += 1
-            else:
-                # Split large section
-                print(f"  📝 Splitting document section ({token_count} tokens)")
-                text_chunks = self.chunk_by_tokens(section_body)
+                all_chunks.append(chunk)
+                global_chunk_idx += 1
 
-                for chunk_text in text_chunks:
-                    chunks.append({
-                        "text": chunk_text,
-                        "chunk_index": chunk_idx,
-                        "section_title": section_title
-                    })
-                    chunk_idx += 1
-
-        return chunks
+        print(f"✅ נוצרו {len(all_chunks)} חתיכות מבוססות משפטים")
+        return all_chunks
 
     def get_stats(self) -> Dict:
         """Get statistics for the unified index"""
@@ -1027,7 +1097,7 @@ def main():
     # Define blob paths to process - type will be auto-detected from path
     blob_paths = [
         "CS101/Section1/Docs_md/1.md",
-        "CS101/Section1/Videos_md/2.md"
+        # "CS101/Section1/Videos_md/2.md"
     ]
 
     result = index_content_files(blob_paths, create_new_index=True)
