@@ -110,7 +110,6 @@ class VideoIndexerManager:
 
 
     def _extract_token_expiry(self, token):
-        """חילוץ זמן פקיעה מ-JWT token - פשוט נגדיר שהטוקן תקף לשעה"""
         try:
             # במקום לפענח את הטוקן, פשוט נגדיר שהוא תקף לשעה מעכשיו
             self._token_expiry = datetime.utcnow() + timedelta(hours=1)
