@@ -7,7 +7,8 @@ from typing import Optional
 from VideoIndexerClient.Consts import Consts
 from VideoIndexerClient.account_token_provider import get_arm_access_token, get_account_access_token_async
 
-
+from Config.logging_config import setup_logging
+logger = setup_logging()
 def get_file_name_no_extension(file_path):
     return os.path.splitext(os.path.basename(file_path))[0]
 
@@ -47,7 +48,7 @@ class VideoIndexerClient:
         response.raise_for_status()
 
         self.account = response.json()
-        print(f'[Account Details] Id:{self.account["properties"]["accountId"]}, Location: {self.account["location"]}')
+        logger.info(f'[Account Details] Id:{self.account["properties"]["accountId"]}, Location: {self.account["location"]}')
 
         return f'[Account Details] Id:{self.account["properties"]["accountId"]}, Location: {self.account["location"]}'
 
@@ -93,7 +94,7 @@ class VideoIndexerClient:
         response.raise_for_status()
 
         video_id = response.json().get('id')
-        print(f'Video ID {video_id} was uploaded successfully')
+        logger.info(f'Video ID {video_id} was uploaded successfully')
 
         if wait_for_index:
             self.wait_for_index_async(video_id)
@@ -138,14 +139,14 @@ class VideoIndexerClient:
         if len(excluded_ai) > 0:
             params['excludedAI'] = excluded_ai
 
-        print('Uploading a local file using multipart/form-data post request..')
+        logger.info('Uploading a local file using multipart/form-data post request..')
 
         response = requests.post(url, params=params, files={'file': open(media_path,'rb')})
 
         response.raise_for_status()
 
         if response.status_code != 200:
-            print(f'Request failed with status code: {response.StatusCode}')
+            logger.info(f'Request failed with status code: {response.StatusCode}')
 
         video_id = response.json().get('id')
 
@@ -155,7 +156,7 @@ class VideoIndexerClient:
         '''
         Calls getVideoIndex API in 10 second intervals until the indexing state is 'processed'
         (https://api-portal.videoindexer.ai/api-details#api=Operations&operation=Get-Video-Index).
-        Prints video index when the index is complete, otherwise throws exception.
+        logger.infos video index when the index is complete, otherwise throws exception.
 
         :param video_id: The video ID to wait for
         :param language: The language to translate video insights
@@ -171,7 +172,7 @@ class VideoIndexerClient:
             'language': language
         }
 
-        print(f'Checking if video {video_id} has finished indexing...')
+        logger.info(f'Checking if video {video_id} has finished indexing...')
         processing = True
         start_time = time.time()
         while processing:
@@ -184,17 +185,17 @@ class VideoIndexerClient:
 
             if video_state == 'Processed':
                 processing = False
-                print(f'The video index has completed. Here is the full JSON of the index for video ID {video_id}: \n{video_result}')
+                logger.info(f'The video index has completed. Here is the full JSON of the index for video ID {video_id}: \n{video_result}')
                 break
             elif video_state == 'Failed':
                 processing = False
-                print(f"The video index failed for video ID {video_id}.")
+                logger.info(f"The video index failed for video ID {video_id}.")
                 break
 
-            print(f'The video index state is {video_state}')
+            logger.info(f'The video index state is {video_state}')
 
             if timeout_sec is not None and time.time() - start_time > timeout_sec:
-                print(f'Timeout of {timeout_sec} seconds reached. Exiting...')
+                logger.info(f'Timeout of {timeout_sec} seconds reached. Exiting...')
                 break
 
             time.sleep(10) # wait 10 seconds before checking again
@@ -219,13 +220,13 @@ class VideoIndexerClient:
         '''
         Gets the video index. Calls the index API
         (https://api-portal.videoindexer.ai/api-details#api=Operations&operation=Search-Videos)
-        Prints the video metadata, otherwise throws an exception
+        logger.infos the video metadata, otherwise throws an exception
 
         :param video_id: The video ID
         '''
         self.get_account_async() # if account is not initialized, get it
 
-        print(f'Searching videos in account {self.account["properties"]["accountId"]} for video ID {video_id}.')
+        logger.info(f'Searching videos in account {self.account["properties"]["accountId"]} for video ID {video_id}.')
 #https://api.videoindexer.ai/{location}/Accounts/{accountId}/Videos/{videoId}/Index[?language][&reTranslate][&includeStreamingUrls][&includedInsights][&excludedInsights][&includeSummarizedInsights][&accessToken]
 
         url = f'{self.consts.ApiEndpoint}/{self.account["location"]}/Accounts/{self.account["properties"]["accountId"]}/' + \
@@ -240,7 +241,7 @@ class VideoIndexerClient:
         response.raise_for_status()
 
         search_result = response.json()
-        print(f'Here are the search results: \n{search_result}')
+        logger.info(f'Here are the search results: \n{search_result}')
         return search_result
 
     def generate_prompt_content_async(self, video_id:str) -> None:
@@ -267,7 +268,7 @@ class VideoIndexerClient:
         response = requests.post(url, headers=headers, params=params)
 
         response.raise_for_status()
-        print(f"Prompt content generation for {video_id=} started...")
+        logger.info(f"Prompt content generation for {video_id=} started...")
 
     def get_prompt_content_async(self, video_id:str, raise_on_not_found:bool=True) -> Optional[dict]:
         '''
@@ -315,7 +316,7 @@ class VideoIndexerClient:
         if check_alreay_exists:
             prompt_content = self.get_prompt_content_async(video_id, raise_on_not_found=False)
             if prompt_content is not None:
-                print(f'Prompt content already exists for video ID {video_id}.')
+                logger.info(f'Prompt content already exists for video ID {video_id}.')
                 return prompt_content
 
         self.generate_prompt_content_async(video_id)
@@ -326,10 +327,10 @@ class VideoIndexerClient:
             prompt_content = self.get_prompt_content_async(video_id, raise_on_not_found=False)
 
             if timeout_sec is not None and time.time() - start_time > timeout_sec:
-                print(f'Timeout of {timeout_sec} seconds reached. Exiting...')
+                logger.info(f'Timeout of {timeout_sec} seconds reached. Exiting...')
                 break
 
-            print('Prompt content is not ready yet. Waiting 5 seconds before checking again...')
+            logger.info('Prompt content is not ready yet. Waiting 5 seconds before checking again...')
             time.sleep(10)
 
         return prompt_content
@@ -339,7 +340,7 @@ class VideoIndexerClient:
         Calls the getVideoInsightsWidget API
         (https://api-portal.videoindexer.ai/api-details#api=Operations&operation=Get-Video-Insights-Widget)
         It first generates a new access token for the video scope.
-        Prints the VideoInsightsWidget URL, otherwise throws exception.
+        logger.infos the VideoInsightsWidget URL, otherwise throws exception.
 
         :param video_id: The video ID
         :param widget_type: The widget type
@@ -352,7 +353,7 @@ class VideoIndexerClient:
                                                                   permission_type='Contributor', scope='Video',
                                                                   video_id=video_id)
 
-        print(f'Getting the insights widget URL for video {video_id}')
+        logger.info(f'Getting the insights widget URL for video {video_id}')
 
         params = {
             'widgetType': widget_type,
@@ -368,14 +369,14 @@ class VideoIndexerClient:
         response.raise_for_status()
 
         insights_widget_url = response.url
-        print(f'Got the insights widget URL: {insights_widget_url}')
+        logger.info(f'Got the insights widget URL: {insights_widget_url}')
 
     def get_player_widget_url_async(self, video_id:str) -> None:
         '''
         Calls the getVideoPlayerWidget API
         (https://api-portal.videoindexer.ai/api-details#api=Operations&operation=Get-Video-Player-Widget)
         It first generates a new access token for the video scope.
-        Prints the VideoPlayerWidget URL, otherwise throws exception
+        logger.infos the VideoPlayerWidget URL, otherwise throws exception
 
         :param video_id: The video ID
         '''
@@ -386,7 +387,7 @@ class VideoIndexerClient:
                                                                   permission_type='Contributor', scope='Video',
                                                                   video_id=video_id)
 
-        print(f'Getting the player widget URL for video {video_id}')
+        logger.info(f'Getting the player widget URL for video {video_id}')
 
         params = {
             'accessToken': video_scope_access_token
@@ -400,4 +401,4 @@ class VideoIndexerClient:
         response.raise_for_status()
 
         url = response.url
-        print(f'Got the player widget URL: {url}')
+        logger.info(f'Got the player widget URL: {url}')

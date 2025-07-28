@@ -10,7 +10,8 @@ from azure.search.documents import SearchClient
 from azure.search.documents.models import VectorizedQuery
 from openai import AzureOpenAI
 import traceback
-
+from Config.logging_config import setup_logging
+logger = setup_logging()
 from Config.config import (
     SEARCH_SERVICE_NAME, SEARCH_API_KEY,
     AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_VERSION,
@@ -52,7 +53,7 @@ class AdvancedUnifiedContentSearch:
 
     def check_index_status(self) -> Dict:
         """בדיקת מצב האינדקס המאוחד והצגת מידע בסיסי"""
-        print("=" * 60)
+        logger.info("=" * 60)
 
         try:
             # חיפוש כללי לבדיקה
@@ -66,11 +67,11 @@ class AdvancedUnifiedContentSearch:
             total_count = results.get_count()
             docs = list(results)
 
-            print(f"📊 סה\"כ צ'אנקים באינדקס המאוחד: {total_count}")
-            print(f"📄 מסמכים שהוחזרו לבדיקה: {len(docs)}")
+            logger.info(f"📊 סה\"כ צ'אנקים באינדקס המאוחד: {total_count}")
+            logger.info(f"📄 מסמכים שהוחזרו לבדיקה: {len(docs)}")
 
             if docs:
-                print(f"✅ האינדקס המאוחד פעיל ומכיל נתונים")
+                logger.info(f"✅ האינדקס המאוחד פעיל ומכיל נתונים")
 
                 # ספירה לפי סוג תוכן
                 video_results = self.search_client.search("*", filter="content_type eq 'video'",
@@ -81,32 +82,32 @@ class AdvancedUnifiedContentSearch:
                                                         include_total_count=True, top=0)
                 doc_count = doc_results.get_count()
 
-                print(f"🎥 וידאו צ'אנקים: {video_count}")
-                print(f"📝 מסמך צ'אנקים: {doc_count}")
+                logger.info(f"🎥 וידאו צ'אנקים: {video_count}")
+                logger.info(f"📝 מסמך צ'אנקים: {doc_count}")
 
                 # הצגת דוגמאות למסמכים
-                print(f"\n📄 דוגמאות למסמכים באינדקס:")
+                logger.info(f"\n📄 דוגמאות למסמכים באינדקס:")
                 for i, doc in enumerate(docs[:10], 1):
                     content_type = doc.get('content_type', 'unknown')
-                    print(f"\n📄 מסמך {i} ({content_type}):")
-                    print(f"  🆔 ID: {doc.get('id', 'N/A')}")
-                    print(f"  📄 Source ID: {doc.get('source_id', 'N/A')}")
-                    print(f"  📝 Source Name: {doc.get('source_name', 'N/A')}")
-                    print(f"  📑 Chunk Index: {doc.get('chunk_index', 'N/A')}")
+                    logger.info(f"\n📄 מסמך {i} ({content_type}):")
+                    logger.info(f"  🆔 ID: {doc.get('id', 'N/A')}")
+                    logger.info(f"  📄 Source ID: {doc.get('source_id', 'N/A')}")
+                    logger.info(f"  📝 Source Name: {doc.get('source_name', 'N/A')}")
+                    logger.info(f"  📑 Chunk Index: {doc.get('chunk_index', 'N/A')}")
 
                     if content_type == 'video':
-                        print(f"  ⏰ Start Time: {doc.get('start_time', 'N/A')}")
-                        print(f"  ⏱️ Start Seconds: {doc.get('start_seconds', 'N/A')}")
+                        logger.info(f"  ⏰ Start Time: {doc.get('start_time', 'N/A')}")
+                        logger.info(f"  ⏱️ Start Seconds: {doc.get('start_seconds', 'N/A')}")
                     elif content_type == 'document':
-                        print(f"  📋 Section Title: {doc.get('section_title', 'N/A')}")
-                        print(f"  📄 Document Type: {doc.get('document_type', 'N/A')}")
+                        logger.info(f"  📋 Section Title: {doc.get('section_title', 'N/A')}")
+                        logger.info(f"  📄 Document Type: {doc.get('document_type', 'N/A')}")
 
                     # הצגת תוכן הטקסט
                     text = doc.get('text', '')
                     if text:
                         preview = text[:150] + "..." if len(text) > 150 else text
-                        print(f"  📜 תוכן: {preview}")
-                    print("-" * 30)
+                        logger.info(f"  📜 תוכן: {preview}")
+                    logger.info("-" * 30)
 
                 return {
                     "status": "active",
@@ -116,11 +117,11 @@ class AdvancedUnifiedContentSearch:
                     "sample_doc": docs[0] if docs else None
                 }
             else:
-                print("⚠️ האינדקס קיים אבל ריק")
+                logger.info("⚠️ האינדקס קיים אבל ריק")
                 return {"status": "empty", "total_chunks": 0}
 
         except Exception as e:
-            print(f"❌ שגיאה בגישה לאינדקס: {e}")
+            logger.info(f"❌ שגיאה בגישה לאינדקס: {e}")
             logger.error(f"Error checking index status: {e}")
             return {"status": "error", "error": str(e)}
 
@@ -139,7 +140,7 @@ class AdvancedUnifiedContentSearch:
     def simple_text_search(self, query: str, top_k: int = 5, content_type: str = None, source_id: str = None) -> List[
         Dict]:
         """חיפוש טקסטואלי פשוט במידה ולא ניתן לחלץ embedding"""
-        print("=" * 60)
+        logger.info("=" * 60)
 
         try:
             search_params = {
@@ -169,52 +170,52 @@ class AdvancedUnifiedContentSearch:
             total_count = results.get_count()
 
             if not docs:
-                print("❌ לא נמצאו תוצאות")
+                logger.info("❌ לא נמצאו תוצאות")
                 return []
 
             filter_msg = self._build_filter_message(content_type, source_id)
-            print(f"✅ נמצאו {len(docs)} תוצאות מתוך {total_count} צ'אנקים{filter_msg}:")
+            logger.info(f"✅ נמצאו {len(docs)} תוצאות מתוך {total_count} צ'אנקים{filter_msg}:")
 
             for i, doc in enumerate(docs, 1):
                 score = doc.get('@search.score', 0)
                 content_type_doc = doc.get('content_type', 'unknown')
-                print(f"\n📄 תוצאה {i} ({content_type_doc}, ציון: {score:.3f}):")
-                print(f"  📄 מקור ID: {doc.get('source_id', 'N/A')}")
-                print(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
+                logger.info(f"\n📄 תוצאה {i} ({content_type_doc}, ציון: {score:.3f}):")
+                logger.info(f"  📄 מקור ID: {doc.get('source_id', 'N/A')}")
+                logger.info(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
 
                 if content_type_doc == 'video':
                     start_time = doc.get('start_time', '')
                     end_time = doc.get('end_time', '')
                     if start_time:
-                        print(f"  ⏰ זמן: {start_time} - {end_time}")
+                        logger.info(f"  ⏰ זמן: {start_time} - {end_time}")
                 elif content_type_doc == 'document':
                     section_title = doc.get('section_title', '')
                     if section_title:
-                        print(f"  📋 כותרת: {section_title}")
+                        logger.info(f"  📋 כותרת: {section_title}")
 
                 text = doc.get('text', '')
                 if text:
                     preview = text[:200] + "..." if len(text) > 200 else text
-                    print(f"  📜 תוכן: {preview}")
+                    logger.info(f"  📜 תוכן: {preview}")
 
-                print("—" * 40)
+                logger.info("—" * 40)
 
             return docs
 
         except Exception as e:
-            print(f"❌ שגיאה בחיפוש טקסטואלי: {e}")
+            logger.info(f"❌ שגיאה בחיפוש טקסטואלי: {e}")
             logger.error(f"Error in text search: {e}")
             return []
 
     def hybrid_search(self, query: str, top_k: int = 5, content_type: str = None, source_id: str = None) -> List[Dict]:
         """חיפוש היברידי - משלב טקסט ווקטור"""
-        print("=" * 60)
+        logger.info("=" * 60)
 
         try:
             # יצירת embedding לשאלה
             query_vector = self.generate_query_embedding(query)
             if not query_vector:
-                print("⚠️ לא ניתן ליצור embedding, מבצע חיפוש טקסטואלי בלבד")
+                logger.info("⚠️ לא ניתן ליצור embedding, מבצע חיפוש טקסטואלי בלבד")
                 return self.simple_text_search(query, top_k, content_type, source_id)
 
             search_params = {
@@ -249,56 +250,56 @@ class AdvancedUnifiedContentSearch:
             total_count = results.get_count()
 
             if not docs:
-                print("❌ לא נמצאו תוצאות היברידיות")
+                logger.info("❌ לא נמצאו תוצאות היברידיות")
                 return []
 
             # Slice to requested top_k for display and return
             docs = docs[:top_k]
 
             filter_msg = self._build_filter_message(content_type, source_id)
-            print(f"✅ נמצאו {len(docs)} תוצאות היברידיות מתוך {total_count} צ'אנקים{filter_msg}:")
+            logger.info(f"✅ נמצאו {len(docs)} תוצאות היברידיות מתוך {total_count} צ'אנקים{filter_msg}:")
 
             for i, doc in enumerate(docs, 1):
                 score = doc.get('@search.score', 0)
                 content_type_doc = doc.get('content_type', 'unknown')
-                print(f"\n📄 תוצאה {i} ({content_type_doc}, ציון משולב: {score:.3f}):")
-                print(f"  📄 מקור ID: {doc.get('source_id', 'N/A')}")
-                print(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
+                logger.info(f"\n📄 תוצאה {i} ({content_type_doc}, ציון משולב: {score:.3f}):")
+                logger.info(f"  📄 מקור ID: {doc.get('source_id', 'N/A')}")
+                logger.info(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
 
                 if content_type_doc == 'video':
                     start_time = doc.get('start_time', '')
                     end_time = doc.get('end_time', '')
                     if start_time:
-                        print(f"  ⏰ זמן: {start_time} - {end_time}")
+                        logger.info(f"  ⏰ זמן: {start_time} - {end_time}")
                 elif content_type_doc == 'document':
                     section_title = doc.get('section_title', '')
                     if section_title:
-                        print(f"  📋 כותרת: {section_title}")
+                        logger.info(f"  📋 כותרת: {section_title}")
 
                 text = doc.get('text', '')
                 if text:
                     preview = text[:200] + "..." if len(text) > 200 else text
-                    print(f"  📜 תוכן: {preview}")
+                    logger.info(f"  📜 תוכן: {preview}")
 
-                print("—" * 40)
+                logger.info("—" * 40)
 
             return docs
 
         except Exception as e:
-            print(f"❌ שגיאה בחיפוש היברידי: {e}")
+            logger.info(f"❌ שגיאה בחיפוש היברידי: {e}")
             logger.error(f"Error in hybrid search: {e}")
             return []
 
     def semantic_search(self, query: str, top_k: int = 5, content_type: str = None, source_id: str = None) -> List[
         Dict]:
         """חיפוש סמנטי מתקדם"""
-        print("=" * 60)
+        logger.info("=" * 60)
 
         try:
             # יצירת embedding לשאלה
             query_vector = self.generate_query_embedding(query)
             if not query_vector:
-                print("⚠️ לא ניתן ליצור embedding, מבצע חיפוש טקסטואלי בלבד")
+                logger.info("⚠️ לא ניתן ליצור embedding, מבצע חיפוש טקסטואלי בלבד")
                 return self.simple_text_search(query, top_k, content_type, source_id)
 
             # הכנת פרמטרים לחיפוש
@@ -337,40 +338,40 @@ class AdvancedUnifiedContentSearch:
             docs = list(results)
 
             if not docs:
-                print("❌ לא נמצאו תוצאות סמנטיות")
+                logger.info("❌ לא נמצאו תוצאות סמנטיות")
                 return []
 
             filter_msg = self._build_filter_message(content_type, source_id)
-            print(f"✅ נמצאו {len(docs)} תוצאות סמנטיות{filter_msg}:")
+            logger.info(f"✅ נמצאו {len(docs)} תוצאות סמנטיות{filter_msg}:")
 
             for i, doc in enumerate(docs, 1):
                 score = doc.get('@search.score', 0)
                 content_type_doc = doc.get('content_type', 'unknown')
-                print(f"\n📄 תוצאה {i} ({content_type_doc}, ציון סמנטי: {score:.3f}):")
-                print(f"  📄 מקור ID: {doc.get('source_id', 'N/A')}")
-                print(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
+                logger.info(f"\n📄 תוצאה {i} ({content_type_doc}, ציון סמנטי: {score:.3f}):")
+                logger.info(f"  📄 מקור ID: {doc.get('source_id', 'N/A')}")
+                logger.info(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
 
                 if content_type_doc == 'video':
                     start_time = doc.get('start_time', '')
                     end_time = doc.get('end_time', '')
                     if start_time:
-                        print(f"  ⏰ זמן: {start_time} - {end_time}")
+                        logger.info(f"  ⏰ זמן: {start_time} - {end_time}")
                 elif content_type_doc == 'document':
                     section_title = doc.get('section_title', '')
                     if section_title:
-                        print(f"  📋 כותרת: {section_title}")
+                        logger.info(f"  📋 כותרת: {section_title}")
 
                 text = doc.get('text', '')
                 if text:
                     preview = text[:200] + "..." if len(text) > 200 else text
-                    print(f"  📜 תוכן: {preview}")
+                    logger.info(f"  📜 תוכן: {preview}")
 
-                print("—" * 40)
+                logger.info("—" * 40)
 
             return docs
 
         except Exception as e:
-            print(f"❌ שגיאה בחיפוש סמנטי מתקדם: {e}")
+            logger.info(f"❌ שגיאה בחיפוש סמנטי מתקדם: {e}")
             logger.error(f"Error in semantic search: {e}")
             # Fallback to regular hybrid search
             return self.hybrid_search(query, top_k, content_type, source_id)
@@ -407,8 +408,8 @@ class AdvancedUnifiedContentSearch:
 
     def get_video_transcript(self, video_id: str) -> Dict:
         """קבלת תמלול מלא של הרצאה ספציפית לפי ID - כמו בקובץ המקורי"""
-        print(f"📹 קבלת תמלול מלא עבור וידאו ID: {video_id}")
-        print("=" * 60)
+        logger.info(f"📹 קבלת תמלול מלא עבור וידאו ID: {video_id}")
+        logger.info("=" * 60)
 
         try:
             # קבלת כל הצ'אנקים של הוידאו
@@ -423,13 +424,13 @@ class AdvancedUnifiedContentSearch:
             docs = list(results)
 
             if not docs:
-                print(f"❌ לא נמצא וידאו עם ID: {video_id}")
+                logger.info(f"❌ לא נמצא וידאו עם ID: {video_id}")
                 return {"error": f"לא נמצא וידאו עם ID: {video_id}"}
 
-            print(f"🎬 וידאו ID: {video_id}")
-            print(f"📄 סה\"כ צ'אנקים: {len(docs)}")
-            print("\n📜 תמלול מלא:")
-            print("=" * 60)
+            logger.info(f"🎬 וידאו ID: {video_id}")
+            logger.info(f"📄 סה\"כ צ'אנקים: {len(docs)}")
+            logger.info("\n📜 תמלול מלא:")
+            logger.info("=" * 60)
 
             # הדפסת התמלול המלא
             for i, doc in enumerate(docs, 1):
@@ -437,9 +438,9 @@ class AdvancedUnifiedContentSearch:
                 end_time = doc.get('end_time', 'N/A')
                 text = doc.get('text', '')
 
-                print(f"\n⏰ [{start_time} - {end_time}]")
-                print(f"{text}")
-                print("-" * 40)
+                logger.info(f"\n⏰ [{start_time} - {end_time}]")
+                logger.info(f"{text}")
+                logger.info("-" * 40)
 
             # חישוב סטטיסטיקות
             total_chunks = len(docs)
@@ -454,15 +455,15 @@ class AdvancedUnifiedContentSearch:
                 "transcript": docs
             }
 
-            print(f"\n📊 סיכום:")
-            print(f"  📝 וידאו ID: {summary['video_id']}")
-            print(f"  📄 צ'אנקים: {summary['total_chunks']}")
-            print(f"  📏 אורך טקסט כולל: {summary['total_text_characters']} תווים")
+            logger.info(f"\n📊 סיכום:")
+            logger.info(f"  📝 וידאו ID: {summary['video_id']}")
+            logger.info(f"  📄 צ'אנקים: {summary['total_chunks']}")
+            logger.info(f"  📏 אורך טקסט כולל: {summary['total_text_characters']} תווים")
 
             return summary
 
         except Exception as e:
-            print(f"❌ שגיאה בקבלת תמלול: {e}")
+            logger.info(f"❌ שגיאה בקבלת תמלול: {e}")
             logger.error(f"Error getting video transcript: {e}")
             return {"error": str(e)}
 
@@ -524,14 +525,14 @@ class AdvancedUnifiedContentSearch:
                 summary["unique_sections"] = len(sections)
                 summary["section_titles"] = list(sections)
 
-            print(f"📊 סיכום {detected_content_type} {source_id}:")
-            print(f"  📝 מקור ID: {source_id}")
-            print(f"  📄 צ'אנקים: {summary['total_chunks']}")
-            print(f"  📏 אורך טקסט כולל: {summary['total_text_characters']} תווים")
-            print(f"  📊 אורך צ'אנק ממוצע: {summary['average_chunk_length']} תווים")
+            logger.info(f"📊 סיכום {detected_content_type} {source_id}:")
+            logger.info(f"  📝 מקור ID: {source_id}")
+            logger.info(f"  📄 צ'אנקים: {summary['total_chunks']}")
+            logger.info(f"  📏 אורך טקסט כולל: {summary['total_text_characters']} תווים")
+            logger.info(f"  📊 אורך צ'אנק ממוצע: {summary['average_chunk_length']} תווים")
 
             if detected_content_type == 'document' and 'unique_sections' in summary:
-                print(f"  📋 סעיפים: {summary['unique_sections']}")
+                logger.info(f"  📋 סעיפים: {summary['unique_sections']}")
 
             return summary
 
@@ -542,19 +543,19 @@ class AdvancedUnifiedContentSearch:
 
 def run_unified_search_demo():
     """הרצת דמו מלא של מערכת החיפוש המאוחדת"""
-    print("🔍 מערכת חיפוש מתקדמת לתוכן מאוחד - וידאו ומסמכים")
-    print("=" * 80)
+    logger.info("🔍 מערכת חיפוש מתקדמת לתוכן מאוחד - וידאו ומסמכים")
+    logger.info("=" * 80)
 
     try:
         # יצירת מערכת החיפוש
         search_system = AdvancedUnifiedContentSearch("unified-content-chunks")
 
         # בדיקת מצב האינדקס
-        print("\n🔧 בדיקת מצב האינדקס המאוחד:")
+        logger.info("\n🔧 בדיקת מצב האינדקס המאוחד:")
         status = search_system.check_index_status()
 
         if status.get("status") != "active":
-            print("❌ האינדקס לא פעיל או ריק. אנא ודא שהאינדקס נוצר ומכיל נתונים.")
+            logger.info("❌ האינדקס לא פעיל או ריק. אנא ודא שהאינדקס נוצר ומכיל נתונים.")
             return
 
         # שאלות לדוגמה
@@ -564,63 +565,63 @@ def run_unified_search_demo():
             "איך אפשר לשלול ביטוי"
         ]
 
-        print(f"\n🎯 הרצת דמו עם {len(demo_queries)} שאלות:")
+        logger.info(f"\n🎯 הרצת דמו עם {len(demo_queries)} שאלות:")
 
         for i, query in enumerate(demo_queries, 1):
-            print(f"\n{'=' * 80}")
-            print(f"🔢 שאלה {i} מתוך {len(demo_queries)}: '{query}'")
-            print(f"{'=' * 80}")
+            logger.info(f"\n{'=' * 80}")
+            logger.info(f"🔢 שאלה {i} מתוך {len(demo_queries)}: '{query}'")
+            logger.info(f"{'=' * 80}")
 
             # 1. חיפוש בכל התוכן
-            print(f"\n1️⃣ חיפוש בכל התוכן (וידאו + מסמכים):")
-            print("-" * 50)
+            logger.info(f"\n1️⃣ חיפוש בכל התוכן (וידאו + מסמכים):")
+            logger.info("-" * 50)
             search_system.semantic_search(query, top_k=3)
 
-            print("\n" + "=" * 80)
+            logger.info("\n" + "=" * 80)
 
             # 2. חיפוש רק בוידאו
-            print(f"\n2️⃣ חיפוש רק בוידאו:")
-            print("-" * 30)
+            logger.info(f"\n2️⃣ חיפוש רק בוידאו:")
+            logger.info("-" * 30)
             search_system.semantic_search(query, top_k=2, content_type="video")
 
-            print("\n" + "=" * 80)
+            logger.info("\n" + "=" * 80)
 
             # 3. חיפוש רק במסמכים
-            print(f"\n3️⃣ חיפוש רק במסמכים:")
-            print("-" * 35)
+            logger.info(f"\n3️⃣ חיפוש רק במסמכים:")
+            logger.info("-" * 35)
             search_system.semantic_search(query, top_k=2, content_type="document")
 
-            print("\n" + "=" * 80)
+            logger.info("\n" + "=" * 80)
 
             # 4. חיפוש בוידאו ספציפי - כמו בקובץ המקורי
-            print(f"\n4️⃣ חיפוש בוידאו ספציפי:")
-            print("-" * 40)
+            logger.info(f"\n4️⃣ חיפוש בוידאו ספציפי:")
+            logger.info("-" * 40)
             # נניח שיש לנו וידאו עם ID זה (תצטרך להחליף לID אמיתי)
             sample_video_id = "2"
-            print(f"🎯 חיפוש בוידאו: {sample_video_id}")
+            logger.info(f"🎯 חיפוש בוידאו: {sample_video_id}")
             search_system.semantic_search(query, top_k=2, content_type="video", source_id=sample_video_id)
 
             # הפסקה בין שאלות
             if i < len(demo_queries):
-                print("\n" + "🔄 עובר לשאלה הבאה..." + "\n")
+                logger.info("\n" + "🔄 עובר לשאלה הבאה..." + "\n")
 
         # סיכום תוכן לדוגמה
         if status.get("sample_doc"):
             sample_source_id = status["sample_doc"].get("source_id")
             sample_content_type = status["sample_doc"].get("content_type")
             if sample_source_id:
-                print(f"\n{'=' * 80}")
-                print(f"📊 סיכום התוכן לדוגמה")
-                print(f"{'=' * 80}")
+                logger.info(f"\n{'=' * 80}")
+                logger.info(f"📊 סיכום התוכן לדוגמה")
+                logger.info(f"{'=' * 80}")
                 search_system.get_content_summary(sample_source_id, sample_content_type)
 
-        print(f"\n🎉 דמו הושלם בהצלחה!")
-        print("💡 ניתן להשתמש במערכת עם שאלות נוספות או לחפש לפי סוג תוכן ספציפי")
+        logger.info(f"\n🎉 דמו הושלם בהצלחה!")
+        logger.info("💡 ניתן להשתמש במערכת עם שאלות נוספות או לחפש לפי סוג תוכן ספציפי")
 
     except Exception as e:
-        print(f"❌ שגיאה בהרצת הדמו: {e}")
+        logger.info(f"❌ שגיאה בהרצת הדמו: {e}")
         logger.error(f"Error in demo: {e}")
-        traceback.print_exc()
+        traceback.logger.info_exc()
 
 
 def main():
@@ -635,44 +636,44 @@ def main():
         # שאלה לדוגמה
         query = "מה ההגדרה של יחס שקילות"
 
-        print(f"\n🔍 חיפוש מאוחד עבור: '{query}'")
-        print("=" * 60)
+        logger.info(f"\n🔍 חיפוש מאוחד עבור: '{query}'")
+        logger.info("=" * 60)
 
         # חיפוש פשוט אחד בלבד
         results = search_system.search_best_answers(query, k=5)
 
         if not results:
-            print("❌ לא נמצאו תוצאות")
+            logger.info("❌ לא נמצאו תוצאות")
             return
 
-        print(f"\n📋 {len(results)} התשובות הטובות ביותר:")
-        print("=" * 60)
+        logger.info(f"\n📋 {len(results)} התשובות הטובות ביותר:")
+        logger.info("=" * 60)
 
         for i, doc in enumerate(results, 1):
             score = doc.get('@search.score', 0)
             content_type = doc.get('content_type', 'unknown')
-            print(f"\n🏆 תשובה {i} ({content_type}, ציון: {score:.3f}):")
-            print(f"  📄 מקור: {doc.get('source_name', 'לא זמין')}")
-            print(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
+            logger.info(f"\n🏆 תשובה {i} ({content_type}, ציון: {score:.3f}):")
+            logger.info(f"  📄 מקור: {doc.get('source_name', 'לא זמין')}")
+            logger.info(f"  📑 צ'אנק: {doc.get('chunk_index', 'N/A')}")
 
             if content_type == 'video':
                 start_time = doc.get('start_time', '')
                 if start_time:
-                    print(f"  ⏰ זמן: {start_time}")
+                    logger.info(f"  ⏰ זמן: {start_time}")
             elif content_type == 'document':
                 section_title = doc.get('section_title', '')
                 if section_title:
-                    print(f"  📋 כותרת: {section_title}")
+                    logger.info(f"  📋 כותרת: {section_title}")
 
             text = doc.get('text', '')
             if text:
-                print(f"  💬 תוכן: {text}")
+                logger.info(f"  💬 תוכן: {text}")
 
-            print("-" * 40)
+            logger.info("-" * 40)
 
     except Exception as e:
-        print(f"❌ שגיאה כללית: {e}")
-        traceback.print_exc()
+        logger.info(f"❌ שגיאה כללית: {e}")
+        traceback.logger.info_exc()
 
 
 if __name__ == "__main__":

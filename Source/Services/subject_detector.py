@@ -13,7 +13,8 @@ from Config.config import (
     AZURE_OPENAI_API_VERSION,
     AZURE_OPENAI_CHAT_COMPLETION_MODEL
 )
-
+from Config.logging_config import setup_logging
+logger = setup_logging()
 
 class SubjectDetector:
     """מזהה סוג מקצוע על בסיס ניתוח קבצים וסרטונים"""
@@ -27,7 +28,7 @@ class SubjectDetector:
         )
         self.max_vid = max_vid
         self.max_doc = max_doc
-        print(f"🔧 מגבלות קבצים: מקסימום {self.max_vid} וידאו, {self.max_doc} מסמכים")
+        logger.info(f"🔧 מגבלות קבצים: מקסימום {self.max_vid} וידאו, {self.max_doc} מסמכים")
 
     def extract_subject_type_from_video_md(self, md_content: str) -> Optional[str]:
         """
@@ -39,18 +40,18 @@ class SubjectDetector:
         Returns:
             "מתמטי" או "הומני" או None אם לא נמצא
         """
-        print("🎬 מתחיל חילוץ סוג מקצוע מקובץ וידאו markdown")
+        logger.info("🎬 מתחיל חילוץ סוג מקצוע מקובץ וידאו markdown")
         # חיפוש אחר הסקציה "סוג מקצוע"
         pattern = r'## 🎓 סוג מקצוע\s*\n\s*([^\n]+)'
         match = re.search(pattern, md_content)
 
         if match:
             subject_type = match.group(1).strip()
-            print(f"✅ נמצא סוג מקצוע: {subject_type}")
+            logger.info(f"✅ נמצא סוג מקצוע: {subject_type}")
             if subject_type in ['מתמטי', 'הומני']:
                 return subject_type
 
-        print("⚠️ לא נמצא סוג מקצוע בקובץ הוידאו")
+        logger.info("⚠️ לא נמצא סוג מקצוע בקובץ הוידאו")
         return None
 
     def extract_full_transcript_from_video_md(self, md_content: str) -> str:
@@ -63,17 +64,17 @@ class SubjectDetector:
         Returns:
             הטרנסקריפט המלא או מחרוזת ריקה
         """
-        print("📄 מתחיל חילוץ טרנסקריפט מלא מקובץ וידאו")
+        logger.info("📄 מתחיל חילוץ טרנסקריפט מלא מקובץ וידאו")
         # חיפוש אחר הסקציה "טרנסקריפט מלא"
         pattern = r'## 📄 טרנסקריפט מלא\s*\n(.*?)(?=\n## |\n$)'
         match = re.search(pattern, md_content, re.DOTALL)
 
         if match:
             transcript = match.group(1).strip()
-            print(f"✅ נמצא טרנסקריפט באורך {len(transcript)} תווים")
+            logger.info(f"✅ נמצא טרנסקריפט באורך {len(transcript)} תווים")
             return transcript
 
-        print("⚠️ לא נמצא טרנסקריפט בקובץ הוידאו")
+        logger.info("⚠️ לא נמצא טרנסקריפט בקובץ הוידאו")
         return ""
 
     def analyze_files_with_llm(self, file_contents: List[Dict[str, str]]) -> str:
@@ -87,8 +88,8 @@ class SubjectDetector:
         Returns:
             "מתמטי" או "הומני"
         """
-        print(f"🤖 מתחיל ניתוח עם מודל השפה עבור {len(file_contents)} קבצים")
-        print(f"📏 מגבלות: מקסימום {self.max_vid} וידאו, {self.max_doc} מסמכים")
+        logger.info(f"🤖 מתחיל ניתוח עם מודל השפה עבור {len(file_contents)} קבצים")
+        logger.info(f"📏 מגבלות: מקסימום {self.max_vid} וידאו, {self.max_doc} מסמכים")
 
         # הפרדת קבצים לוידאו ומסמכים
         video_files = []
@@ -100,21 +101,21 @@ class SubjectDetector:
             else:
                 doc_files.append(file_info)
 
-        print(f"  📊 נמצאו: {len(video_files)} וידאו, {len(doc_files)} מסמכים")
+        logger.info(f"  📊 נמצאו: {len(video_files)} וידאו, {len(doc_files)} מסמכים")
 
         # הגבלת מספר הקבצים
         selected_videos = video_files[:self.max_vid]
         selected_docs = doc_files[:self.max_doc]
 
         if len(video_files) > self.max_vid:
-            print(f"  ⚠️ הגבלתי וידאו ל-{self.max_vid} מתוך {len(video_files)}")
+            logger.info(f"  ⚠️ הגבלתי וידאו ל-{self.max_vid} מתוך {len(video_files)}")
         if len(doc_files) > self.max_doc:
-            print(f"  ⚠️ הגבלתי מסמכים ל-{self.max_doc} מתוך {len(doc_files)}")
+            logger.info(f"  ⚠️ הגבלתי מסמכים ל-{self.max_doc} מתוך {len(doc_files)}")
 
         # שילוב הקבצים הנבחרים
         selected_files = selected_videos + selected_docs
 
-        print(f"  ✅ מנתח {len(selected_files)} קבצים: {len(selected_videos)} וידאו + {len(selected_docs)} מסמכים")
+        logger.info(f"  ✅ מנתח {len(selected_files)} קבצים: {len(selected_videos)} וידאו + {len(selected_docs)} מסמכים")
 
         # יצירת פרומפט עם הקבצים הנבחרים
         prompt = """אתה מומחה בסיווג תוכן אקדמי. עליך לנתח את התוכן הבא ולקבוע האם זה מקצוע מתמטי/טכני או הומני.
@@ -128,18 +129,18 @@ class SubjectDetector:
 """
 
         for i, file_info in enumerate(selected_files, 1):
-            print(f"  📄 מוסיף לניתוח קובץ {i}: {file_info['path']}")
+            logger.info(f"  📄 מוסיף לניתוח קובץ {i}: {file_info['path']}")
             prompt += f"\n--- קובץ {i}: {file_info['path']} ---\n"
 
             # אם זה וידאו, השתמש בטרנסקריפט המלא בלבד
             if '/Videos_md/' in file_info['path']:
                 transcript = self.extract_full_transcript_from_video_md(file_info['content'])
                 content = transcript if transcript else file_info['content']
-                print(f"    🎬 וידאו - אורך טרנסקריפט: {len(content)} תווים")
+                logger.info(f"    🎬 וידאו - אורך טרנסקריפט: {len(content)} תווים")
             else:
                 # עבור מסמכים, קח את כל התוכן
                 content = file_info['content']
-                print(f"    📋 מסמך - אורך תוכן: {len(content)} תווים")
+                logger.info(f"    📋 מסמך - אורך תוכן: {len(content)} תווים")
 
             prompt += content
             prompt += "\n" + "="*50 + "\n"
@@ -151,8 +152,8 @@ class SubjectDetector:
 
 תשובה:"""
 
-        print(f"  📊 אורך פרומפט כולל: {len(prompt)} תווים")
-        print(f"  🔄 שולח בקשה למודל השפה...")
+        logger.info(f"  📊 אורך פרומפט כולל: {len(prompt)} תווים")
+        logger.info(f"  🔄 שולח בקשה למודל השפה...")
 
         try:
             response = self.client.chat.completions.create(
@@ -166,18 +167,18 @@ class SubjectDetector:
             )
 
             result = response.choices[0].message.content.strip()
-            print(f"  🎯 תשובת המודל: '{result}'")
+            logger.info(f"  🎯 תשובת המודל: '{result}'")
 
             # וידוא שהתשובה תקינה
             if result in ['מתמטי', 'הומני']:
-                print(f"  ✅ תשובה תקינה: {result}")
+                logger.info(f"  ✅ תשובה תקינה: {result}")
                 return result
             else:
-                print(f"  ⚠️ תשובה לא צפויה מהמודל: {result}, מחזיר 'לא זוהה'")
+                logger.info(f"  ⚠️ תשובה לא צפויה מהמודל: {result}, מחזיר 'לא זוהה'")
                 return "לא זוהה"
 
         except Exception as e:
-            print(f"  ❌ שגיאה בניתוח עם מודל השפה: {e}")
+            logger.info(f"  ❌ שגיאה בניתוח עם מודל השפה: {e}")
             return "לא זוהה"
 
     def detect_subject_from_course_path(self, course_path: str) -> str:
@@ -195,7 +196,7 @@ class SubjectDetector:
         Returns:
             "מתמטי", "הומני", או "לא זוהה"
         """
-        print(f"🎓 מתחיל זיהוי סוג מקצוע עבור קורס: {course_path}")
+        logger.info(f"🎓 מתחיל זיהוי סוג מקצוע עבור קורס: {course_path}")
 
         # מציאת כל הקבצים בקורס
         all_files = self.blob_manager.list_files()
@@ -208,12 +209,12 @@ class SubjectDetector:
         ]
 
         if not course_files:
-            print(f"  ❌ לא נמצאו קבצים בקורס: {course_path}")
+            logger.info(f"  ❌ לא נמצאו קבצים בקורס: {course_path}")
             return "לא זוהה"
 
-        print(f"  📁 נמצאו {len(course_files)} קבצים בקורס:")
+        logger.info(f"  📁 נמצאו {len(course_files)} קבצים בקורס:")
         for file in course_files:
-            print(f"    - {file}")
+            logger.info(f"    - {file}")
 
         # קריאה לפונקציה הקיימת עם רשימת הקבצים
         return self.detect_subject(course_files)
@@ -232,19 +233,19 @@ class SubjectDetector:
         Returns:
             "מתמטי", "הומני", או "לא זוהה"
         """
-        print(f"🔍 מזהה סוג מקצוע עבור {len(file_paths)} קבצים")
+        logger.info(f"🔍 מזהה סוג מקצוע עבור {len(file_paths)} קבצים")
 
         video_subject_types = []
         file_contents = []
 
         # עיבוד כל קובץ
         for file_path in file_paths:
-            print(f"  📄 מעבד קובץ: {file_path}")
+            logger.info(f"  📄 מעבד קובץ: {file_path}")
 
             # הורדת תוכן הקובץ
             content = self.blob_manager.download_to_memory(file_path)
             if not content:
-                print(f"    ⚠️ לא ניתן להוריד קובץ: {file_path}")
+                logger.info(f"    ⚠️ לא ניתן להוריד קובץ: {file_path}")
                 continue
 
             try:
@@ -259,38 +260,38 @@ class SubjectDetector:
                     subject_type = self.extract_subject_type_from_video_md(md_content)
                     if subject_type:
                         video_subject_types.append(subject_type)
-                        print(f"    ✅ נמצא סוג מקצוע: {subject_type}")
+                        logger.info(f"    ✅ נמצא סוג מקצוע: {subject_type}")
                     else:
-                        print(f"    ⚠️ לא נמצא סוג מקצוע בוידאו")
+                        logger.info(f"    ⚠️ לא נמצא סוג מקצוע בוידאו")
 
             except UnicodeDecodeError:
-                print(f"    ❌ שגיאה בקריאת קובץ: {file_path}")
+                logger.info(f"    ❌ שגיאה בקריאת קובץ: {file_path}")
                 continue
 
         # בדיקה אם כל הוידאו עם אותו subject_type (רק אם יש לפחות 2 וידאו)
         if len(video_subject_types) >= 2:
             unique_types = list(set(video_subject_types))
-            print(f"  📊 נמצאו סוגי מקצוע בוידאו: {video_subject_types}")
+            logger.info(f"  📊 נמצאו סוגי מקצוע בוידאו: {video_subject_types}")
 
             if len(unique_types) == 1:
                 result = unique_types[0]
-                print(f"  ✅ כל הוידאו ({len(video_subject_types)}) עם אותו סוג מקצוע: {result}")
+                logger.info(f"  ✅ כל הוידאו ({len(video_subject_types)}) עם אותו סוג מקצוע: {result}")
                 return result
             else:
-                print(f"  🔄 נמצאו סוגי מקצוע שונים בוידאו, מעביר למודל שפה")
+                logger.info(f"  🔄 נמצאו סוגי מקצוע שונים בוידאו, מעביר למודל שפה")
         elif len(video_subject_types) == 1:
-            print(f"  ⚠️ נמצא רק וידאו אחד עם סוג מקצוע: {video_subject_types[0]}, מעביר למודל שפה לאימות")
+            logger.info(f"  ⚠️ נמצא רק וידאו אחד עם סוג מקצוע: {video_subject_types[0]}, מעביר למודל שפה לאימות")
         else:
-            print(f"  🔄 לא נמצאו וידאו עם סוג מקצוע מוגדר, מעביר למודל שפה")
+            logger.info(f"  🔄 לא נמצאו וידאו עם סוג מקצוע מוגדר, מעביר למודל שפה")
 
         # אם אין הסכמה או אין וידאו עם subject_type, השתמש במודל שפה
         if not file_contents:
-            print("  ❌ אין תוכן לניתוח")
+            logger.info("  ❌ אין תוכן לניתוח")
             return "לא זוהה"
 
-        print(f"  🤖 מנתח {len(file_contents)} קבצים עם מודל שפה...")
+        logger.info(f"  🤖 מנתח {len(file_contents)} קבצים עם מודל שפה...")
         result = self.analyze_files_with_llm(file_contents)
-        print(f"  ✅ תוצאת ניתוח מודל השפה: {result}")
+        logger.info(f"  ✅ תוצאת ניתוח מודל השפה: {result}")
 
         return result
 
@@ -307,7 +308,7 @@ def detect_subject_from_paths(file_paths: List[str], max_vid: int = 5, max_doc: 
     Returns:
         "מתמטי", "הומני", או "לא זוהה"
     """
-    print(f"🚀 מתחיל זיהוי סוג מקצוע עבור {len(file_paths)} קבצים")
+    logger.info(f"🚀 מתחיל זיהוי סוג מקצוע עבור {len(file_paths)} קבצים")
     detector = SubjectDetector(max_vid=max_vid, max_doc=max_doc)
     return detector.detect_subject(file_paths)
 
@@ -324,28 +325,28 @@ def detect_subject_from_course(course_path: str, max_vid: int = 5, max_doc: int 
     Returns:
         "מתמטי", "הומני", או "לא זוהה"
     """
-    print(f"🎯 מתחיל זיהוי סוג מקצוע עבור קורס: {course_path}")
+    logger.info(f"🎯 מתחיל זיהוי סוג מקצוע עבור קורס: {course_path}")
     detector = SubjectDetector(max_vid=max_vid, max_doc=max_doc)
     return detector.detect_subject_from_course_path(course_path)
 
 
 if __name__ == "__main__":
     # בדיקה של הפונקציה
-    print("🧪 בדיקת זיהוי סוג מקצוע")
-    print("=" * 50)
+    logger.info("🧪 בדיקת זיהוי סוג מקצוע")
+    logger.info("=" * 50)
 
     # בדיקה 1: זיהוי מקורס שלם (הפונקציה החדשה)
-    print("\n🔍 בדיקה 1: זיהוי סוג מקצוע מקורס שלם")
-    print("-" * 40)
+    logger.info("\n🔍 בדיקה 1: זיהוי סוג מקצוע מקורס שלם")
+    logger.info("-" * 40)
 
     course_path = "CS101"
 
     try:
         result = detect_subject_from_course(course_path)
-        print(f"🎯 תוצאה עבור קורס {course_path}: {result}")
+        logger.info(f"🎯 תוצאה עבור קורס {course_path}: {result}")
     except Exception as e:
-        print(f"❌ שגיאה בבדיקת קורס: {e}")
+        logger.info(f"❌ שגיאה בבדיקת קורס: {e}")
         import traceback
-        traceback.print_exc()
+        traceback.logger.info_exc()
 
-    print("\n✅ בדיקות הושלמו!")
+    logger.info("\n✅ בדיקות הושלמו!")

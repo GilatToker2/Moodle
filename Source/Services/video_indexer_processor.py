@@ -16,7 +16,9 @@ from dotenv import load_dotenv
 from VideoIndexerClient.VideoIndexerClient import VideoIndexerClient
 from VideoIndexerClient.Consts import Consts
 from Source.Services.blob_manager import BlobManager
+from Config.logging_config import setup_logging
 
+logger = setup_logging()
 class VideoIndexerManager:
     """
     מנהל עיבוד וידאו באמצעות Azure Video Indexer
@@ -54,10 +56,10 @@ class VideoIndexerManager:
             )
 
             self._vi_client = VideoIndexerClient()
-            print("✅ VideoIndexer client אותחל בהצלחה")
+            logger.info("✅ VideoIndexer client אותחל בהצלחה")
 
         except Exception as e:
-            print(f"⚠️ שגיאה באתחול VideoIndexer client: {e}")
+            logger.info(f"⚠️ שגיאה באתחול VideoIndexer client: {e}")
             self._vi_client = None
 
     def get_valid_token(self):
@@ -83,11 +85,11 @@ class VideoIndexerManager:
     def _refresh_token(self):
         """רענון מפתח Video Indexer"""
         if not self._vi_client or not self._consts:
-            print("⚠️ VideoIndexer client לא זמין, משתמש במפתח קבוע")
+            logger.info("⚠️ VideoIndexer client לא זמין, משתמש במפתח קבוע")
             return
 
         try:
-            print("🔄 מרענן מפתח Video Indexer...")
+            logger.info("🔄 מרענן מפתח Video Indexer...")
 
             # קבלת מפתחות חדשים
             arm_token, vi_token, response = self._vi_client.authenticate_async(self._consts)
@@ -98,26 +100,26 @@ class VideoIndexerManager:
                 # חילוץ זמן פקיעה מהמפתח
                 self._extract_token_expiry(vi_token)
 
-                print(f"✅ מפתח רוענן בהצלחה. אורך: {len(vi_token)}")
+                logger.info(f"✅ מפתח רוענן בהצלחה. אורך: {len(vi_token)}")
                 if self._token_expiry:
                     current_time = datetime.utcnow()
-                    print(f"🕐 זמן נוכחי: {current_time}")
-                    print(f"⏰ פוקע ב: {self._token_expiry}")
+                    logger.info(f"🕐 זמן נוכחי: {current_time}")
+                    logger.info(f"⏰ פוקע ב: {self._token_expiry}")
             else:
-                print("❌ לא התקבל מפתח חדש")
+                logger.info("❌ לא התקבל מפתח חדש")
 
         except Exception as e:
-            print(f"❌ שגיאה ברענון מפתח: {e}")
+            logger.info(f"❌ שגיאה ברענון מפתח: {e}")
 
 
     def _extract_token_expiry(self, token):
         try:
             # במקום לפענח את הטוקן, פשוט נגדיר שהוא תקף לשעה מעכשיו
             self._token_expiry = datetime.utcnow() + timedelta(hours=1)
-            print(f"📅 זמן פקיעת מפתח (משוער): {self._token_expiry}")
+            logger.info(f"📅 זמן פקיעת מפתח (משוער): {self._token_expiry}")
 
         except Exception as e:
-            print(f"⚠️ שגיאה בהגדרת זמן פקיעה: {e}")
+            logger.info(f"⚠️ שגיאה בהגדרת זמן פקיעה: {e}")
 
 
     def _get_params_with_token(self, additional_params=None):
@@ -136,7 +138,7 @@ class VideoIndexerManager:
             video_sas_url: SAS URL של הוידאו ב-blob storage
             video_name: שם הוידאו ב-Video Indexer
         """
-        print(f"📤 מעלה וידאו: {video_name}")
+        logger.info(f"📤 מעלה וידאו: {video_name}")
 
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos"
 
@@ -150,7 +152,7 @@ class VideoIndexerManager:
         })
 
         try:
-            print(f"  ⏳ שולח בקשה ל-Video Indexer...")
+            logger.info(f"  ⏳ שולח בקשה ל-Video Indexer...")
             resp = requests.post(url, params=params, timeout=30)
             resp.raise_for_status()
 
@@ -160,7 +162,7 @@ class VideoIndexerManager:
             if not video_id:
                 raise RuntimeError(f"העלאה נכשלה: {data}")
 
-            print(f"  ✅ הועלה בהצלחה, מזהה וידאו: {video_id}")
+            logger.info(f"  ✅ הועלה בהצלחה, מזהה וידאו: {video_id}")
             return video_id
 
         except requests.exceptions.RequestException as e:
@@ -168,7 +170,7 @@ class VideoIndexerManager:
 
     def wait_for_indexing(self, video_id: str, interval: int = 10, max_wait_minutes: int = 180) -> Dict:
         """המתנה לסיום עיבוד הוידאו ב-Video Indexer"""
-        print(f"⏳ ממתין לסיום עיבוד הוידאו {video_id}...")
+        logger.info(f"⏳ ממתין לסיום עיבוד הוידאו {video_id}...")
 
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Index"
         start_time = time.time()
@@ -182,10 +184,10 @@ class VideoIndexerManager:
                 data = resp.json()
 
                 state = data.get("state")
-                print(f"  📊 מצב עיבוד: {state}")
+                logger.info(f"  📊 מצב עיבוד: {state}")
 
                 if state == "Processed":
-                    print("  ✅ עיבוד הושלם!")
+                    logger.info("  ✅ עיבוד הושלם!")
                     return data
                 elif state == "Failed":
                     raise RuntimeError("עיבוד הוידאו נכשל")
@@ -278,7 +280,7 @@ class VideoIndexerManager:
         if current_segment is not None:
             merged_segments.append(current_segment)
 
-        print(f"  🔗 איחוד סגמנטים: {len(segments)} → {len(merged_segments)} (מקס {max_duration_seconds} שניות)")
+        logger.info(f"  🔗 איחוד סגמנטים: {len(segments)} → {len(merged_segments)} (מקס {max_duration_seconds} שניות)")
         return merged_segments
 
     def create_textual_summary(self, video_id: str, deployment_name: str = "gpt-4o") -> str:
@@ -298,13 +300,13 @@ class VideoIndexerManager:
             summary_id = resp.json().get("id")
             if not summary_id:
                 raise RuntimeError(f"יצירת סיכום נכשלה: {resp.text}")
-            print(f"  ✅ נוצר סיכום עם מזהה: {summary_id}")
+            logger.info(f"  ✅ נוצר סיכום עם מזהה: {summary_id}")
             return summary_id
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 400:
-                print(f"  ⚠️ יצירת סיכום GPT נכשלה (400 Bad Request)")
-                print(f"  ⚠️ יצירת סיכום GPT נכשלה (400 Bad Request)")
-                print(f"  📝 תגובה: {e.response.text}")
+                logger.info(f"  ⚠️ יצירת סיכום GPT נכשלה (400 Bad Request)")
+                logger.info(f"  ⚠️ יצירת סיכום GPT נכשלה (400 Bad Request)")
+                logger.info(f"  📝 תגובה: {e.response.text}")
                 raise RuntimeError(f"סיכום GPT לא זמין: {e.response.text}")
             else:
                 raise
@@ -321,12 +323,12 @@ class VideoIndexerManager:
             state = data.get("state")
             if state == "Processed":
                 summary = data.get("summary", "")
-                print(f"  ✅ הסיכום מוכן. אורך: {len(summary)} תווים")
+                logger.info(f"  ✅ הסיכום מוכן. אורך: {len(summary)} תווים")
                 return summary
             elif state == "Failed":
                 raise RuntimeError(f"יצירת הסיכום נכשלה: {data}")
             else:
-                print(f"  ⏳ מצב הסיכום: {state} — ממתין...")
+                logger.info(f"  ⏳ מצב הסיכום: {state} — ממתין...")
                 time.sleep(10)
 
     def delete_video(self, video_id: str) -> bool:
@@ -338,11 +340,11 @@ class VideoIndexerManager:
             resp = requests.delete(url, params=params, timeout=30)
             resp.raise_for_status()
 
-            print(f"  🗑️ הוידאו נמחק מ-Video Indexer: {video_id}")
+            logger.info(f"  🗑️ הוידאו נמחק מ-Video Indexer: {video_id}")
             return True
 
         except requests.exceptions.RequestException as e:
-            print(f"  ⚠️ שגיאה במחיקת הוידאו מ-Video Indexer: {str(e)}")
+            logger.info(f"  ⚠️ שגיאה במחיקת הוידאו מ-Video Indexer: {str(e)}")
             return False
 
     def extract_video_metadata(self, index_json: Dict) -> Dict:
@@ -390,11 +392,11 @@ class VideoIndexerManager:
             'created_date': datetime.now().isoformat()
         }
 
-        print(f"  📊 חולץ מטא-דאטה:")
-        print(f"    - משך זמן: {metadata['duration']}")
-        print(f"    - מילות מפתח: {len(keywords)} נמצאו")
-        print(f"    - נושאים: {len(topics)} נמצאו")
-        print(f"    - טקסטי OCR: {len(ocr_texts)} נמצאו")
+        logger.info(f"  📊 חולץ מטא-דאטה:")
+        logger.info(f"    - משך זמן: {metadata['duration']}")
+        logger.info(f"    - מילות מפתח: {len(keywords)} נמצאו")
+        logger.info(f"    - נושאים: {len(topics)} נמצאו")
+        logger.info(f"    - טקסטי OCR: {len(ocr_texts)} נמצאו")
 
         return metadata
 
@@ -530,42 +532,42 @@ class VideoIndexerManager:
         # בדיקת סיומת הקובץ
         file_ext = os.path.splitext(video_url)[1].lower()
         if file_ext not in self.supported_formats:
-            print(f"❌ פורמט וידאו לא נתמך: {video_url}")
+            logger.info(f"❌ פורמט וידאו לא נתמך: {video_url}")
             return None
 
         # יצירת SAS URL לוידאו מקונטיינר raw-data
-        print(f"🔗 יוצר SAS URL לוידאו מקונטיינר raw-data: {video_url}")
+        logger.info(f"🔗 יוצר SAS URL לוידאו מקונטיינר raw-data: {video_url}")
         video_sas_url = blob_manager_read.generate_sas_url(video_url, hours=4)
 
         if not video_sas_url:
-            print(f"❌ נכשלה יצירת SAS URL לוידאו: {video_url}")
+            logger.info(f"❌ נכשלה יצירת SAS URL לוידאו: {video_url}")
             return None
 
-        print(f"🔄 מעבד וידאו: {video_name}")
+        logger.info(f"🔄 מעבד וידאו: {video_name}")
 
         try:
-            print(f"\n🎬 מתחיל עיבוד וידאו ל-MD: {video_name}")
+            logger.info(f"\n🎬 מתחיל עיבוד וידאו ל-MD: {video_name}")
 
             # העלאה ועיבוד ל-Video Indexer עם שם הוידאו
             video_id = self.upload_video_from_url(video_sas_url, video_name)
             index_data = self.wait_for_indexing(video_id)
 
             # יצירת סיכום GPT
-            print("  📝 יוצר סיכום GPT...")
+            logger.info("  📝 יוצר סיכום GPT...")
             summary_text = ""
             try:
                 summary_id = self.create_textual_summary(video_id)
                 summary_text = self.get_textual_summary(video_id, summary_id)
-                print(f"  ✅ התקבל סיכום באורך: {len(summary_text)} תווים")
+                logger.info(f"  ✅ התקבל סיכום באורך: {len(summary_text)} תווים")
             except Exception as e:
-                print(f"  ⚠️ יצירת סיכום GPT נכשלה, ממשיך בלי סיכום: {e}")
+                logger.info(f"  ⚠️ יצירת סיכום GPT נכשלה, ממשיך בלי סיכום: {e}")
 
             # חילוץ טרנסקריפט
             transcript_segments = self.extract_transcript_with_timestamps(index_data)
 
             # איחוד סגמנטים אם נדרש
             if merge_segments_duration:
-                print(f"  🔗 מאחד סגמנטים למקסימום {merge_segments_duration} שניות...")
+                logger.info(f"  🔗 מאחד סגמנטים למקסימום {merge_segments_duration} שניות...")
                 transcript_segments = self.merge_segments_by_duration(transcript_segments, merge_segments_duration)
 
             # חילוץ מטא-דאטה
@@ -586,17 +588,17 @@ class VideoIndexerManager:
             # המרה ל-markdown
             md_content = self.parse_insights_to_md(structured_data)
 
-            print(f"  ✅ עיבוד הושלם בהצלחה!")
-            print(f"  📊 נמצאו {len(transcript_segments)} קטעי טרנסקריפט")
+            logger.info(f"  ✅ עיבוד הושלם בהצלחה!")
+            logger.info(f"  📊 נמצאו {len(transcript_segments)} קטעי טרנסקריפט")
 
         except Exception as e:
-            print(f"❌ נכשל עיבוד הוידאו: {str(e)}")
+            logger.info(f"❌ נכשל עיבוד הוידאו: {str(e)}")
             return None
 
         # יצירת נתיב היעד לפי המבנה: CourseID/SectionID/Videos_md/FileID.md
         target_blob_path = f"{course_id}/{section_id}/Videos_md/{file_id}.md"
 
-        print(f"📤 מעלה לקונטיינר processeddata: {target_blob_path}")
+        logger.info(f"📤 מעלה לקונטיינר processeddata: {target_blob_path}")
 
         # שמירה לקונטיינר processeddata
         success = blob_manager_write.upload_text_to_blob(
@@ -605,15 +607,15 @@ class VideoIndexerManager:
         )
 
         if success:
-            print(f"✅ הקובץ הועלה בהצלחה לקונטיינר processeddata: {target_blob_path}")
+            logger.info(f"✅ הקובץ הועלה בהצלחה לקונטיינר processeddata: {target_blob_path}")
 
             # ניקוי: מחיקת הוידאו מ-Video Indexer כדי לנקות קונטיינרים מיותרים
-            print("🧹 מנקה קונטיינרים מיותרים...")
+            logger.info("🧹 מנקה קונטיינרים מיותרים...")
             self.delete_video(video_id)
 
             return target_blob_path
         else:
-            print(f"❌ נכשלה העלאת הקובץ לקונטיינר processeddata")
+            logger.info(f"❌ נכשלה העלאת הקובץ לקונטיינר processeddata")
             return None
 
 
@@ -626,19 +628,19 @@ if __name__ == "__main__":
     video_url = "L_A_Information_system.mp4"
 
 
-    print(f"🧪 מעבד וידאו: {video_name}")
-    print(f"📍 CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
-    print(f"🔗 VideoURL: {video_url}")
+    logger.info(f"🧪 מעבד וידאו: {video_name}")
+    logger.info(f"📍 CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
+    logger.info(f"🔗 VideoURL: {video_url}")
 
     try:
         manager = VideoIndexerManager()
         result = manager.process_video_to_md(course_id, section_id, file_id, video_name, video_url, merge_segments_duration=20)
 
         if result:
-            print(f"\n🎉 הוידאו עובד בהצלחה: {result}")
-            print(f"📁 הקובץ נשמר במבנה: {course_id}/{section_id}/Videos_md/{file_id}.md")
+            logger.info(f"\n🎉 הוידאו עובד בהצלחה: {result}")
+            logger.info(f"📁 הקובץ נשמר במבנה: {course_id}/{section_id}/Videos_md/{file_id}.md")
         else:
-            print(f"\n❌ נכשל עיבוד הוידאו: {video_name}")
+            logger.info(f"\n❌ נכשל עיבוד הוידאו: {video_name}")
 
     except Exception as e:
-        print(f"❌ שגיאה בעיבוד הוידאו: {e}")
+        logger.info(f"❌ שגיאה בעיבוד הוידאו: {e}")

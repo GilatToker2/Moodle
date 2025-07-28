@@ -33,7 +33,8 @@ from Config.config import (
     INDEX_NAME
 )
 
-
+from Config.logging_config import setup_logging
+logger = setup_logging()
 class UnifiedContentIndexer:
     """
     אינדקסר מאוחד לתוכן מסוגים שונים - וידאו ומסמכים
@@ -63,21 +64,21 @@ class UnifiedContentIndexer:
             create_new: If True (default), delete existing index and create new one.
                        If False, use existing index or create if doesn't exist.
         """
-        print(f"🔧 Setting up unified index: {self.index_name}")
+        logger.info(f"🔧 Setting up unified index: {self.index_name}")
 
         try:
             # Check if index exists
             try:
                 existing_index = self.index_client.get_index(self.index_name)
                 if create_new:
-                    print(f"🗑️ Deleting existing index: {self.index_name}")
+                    logger.info(f"🗑️ Deleting existing index: {self.index_name}")
                     self.index_client.delete_index(self.index_name)
-                    print(f"📝 Creating new unified index: {self.index_name}")
+                    logger.info(f"📝 Creating new unified index: {self.index_name}")
                 else:
-                    print(f"✅ Using existing unified index: {self.index_name}")
+                    logger.info(f"✅ Using existing unified index: {self.index_name}")
                     return True
             except ResourceNotFoundError:
-                print(f"📝 Creating new unified index: {self.index_name}")
+                logger.info(f"📝 Creating new unified index: {self.index_name}")
 
             # Vector search configuration
             hnsw_algo = HnswAlgorithmConfiguration(name="my-hnsw-config")
@@ -147,11 +148,11 @@ class UnifiedContentIndexer:
             )
 
             self.index_client.create_or_update_index(index)
-            print("✅ Unified index created successfully")
+            logger.info("✅ Unified index created successfully")
 
             # # הדפסת סכמת האינדקס המפורטת
-            # print("\n📋 סכמת האינדקס שנוצרה - כל השדות:")
-            # print("=" * 80)
+            # logger.info("\n📋 סכמת האינדקס שנוצרה - כל השדות:")
+            # logger.info("=" * 80)
             # for field in fields:
             #     field_info = f"  🔹 {field.name} ({field.type})"
             #
@@ -175,28 +176,28 @@ class UnifiedContentIndexer:
             #     if properties:
             #         field_info += f" [{', '.join(properties)}]"
             #
-            #     print(field_info)
+            #     logger.info(field_info)
             #
-            # print("=" * 80)
-            # print("📝 הסבר השדות:")
-            # print("  🆔 id - מזהה ייחודי לכל chunk")
-            # print("  📋 content_type - סוג התוכן (video/document)")
-            # print("  📋 source_id - מזהה המקור (video_id/document_id)")
-            # print("  📝 text - התוכן הטקסטואלי")
-            # print("  📊 vector - וקטור embedding")
-            # print("  📋 chunk_index - מספר החתיכה")
-            # print("  ⏰ start_time - זמן התחלה (וידאו בלבד)")
-            # print("  ⏰ end_time - זמן סיום (וידאו בלבד)")
-            # print("  📑 section_title - כותרת סעיף (מסמכים בלבד)")
-            # print("  📅 created_date - תאריך יצירה")
-            # print("  🔍 keywords - מילות מפתח")
-            # print("  🏷️ topics - נושאים")
-            # print("=" * 80)
+            # logger.info("=" * 80)
+            # logger.info("📝 הסבר השדות:")
+            # logger.info("  🆔 id - מזהה ייחודי לכל chunk")
+            # logger.info("  📋 content_type - סוג התוכן (video/document)")
+            # logger.info("  📋 source_id - מזהה המקור (video_id/document_id)")
+            # logger.info("  📝 text - התוכן הטקסטואלי")
+            # logger.info("  📊 vector - וקטור embedding")
+            # logger.info("  📋 chunk_index - מספר החתיכה")
+            # logger.info("  ⏰ start_time - זמן התחלה (וידאו בלבד)")
+            # logger.info("  ⏰ end_time - זמן סיום (וידאו בלבד)")
+            # logger.info("  📑 section_title - כותרת סעיף (מסמכים בלבד)")
+            # logger.info("  📅 created_date - תאריך יצירה")
+            # logger.info("  🔍 keywords - מילות מפתח")
+            # logger.info("  🏷️ topics - נושאים")
+            # logger.info("=" * 80)
 
             return True
 
         except Exception as e:
-            print(f"❌ Error creating unified index: {e}")
+            logger.info(f"❌ Error creating unified index: {e}")
             return False
 
     def embed_texts_batch(self, texts: List[str], batch_size: int = 16) -> List[List[float]]:
@@ -205,7 +206,7 @@ class UnifiedContentIndexer:
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
-            print(f"  🔄 Embedding batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
+            logger.info(f"  🔄 Embedding batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
 
             try:
                 response = self.openai_client.embeddings.create(
@@ -216,7 +217,7 @@ class UnifiedContentIndexer:
                 embeddings.extend(batch_embeddings)
 
             except Exception as e:
-                print(f"❌ Error generating embeddings: {e}")
+                logger.info(f"❌ Error generating embeddings: {e}")
                 embeddings.extend([[] for _ in batch])
 
         return embeddings
@@ -370,7 +371,7 @@ class UnifiedContentIndexer:
 
     def _process_document_to_chunks(self, markdown_content: str) -> List[Dict]:
         """Convert document markdown to searchable chunks using sentence-based chunking"""
-        print("📄 מעבד מסמך עם חלוקה מבוססת משפטים")
+        logger.info("📄 מעבד מסמך עם חלוקה מבוססת משפטים")
 
         # Split by headers to preserve sections
         sections = re.split(r'\n#+\s+', markdown_content)
@@ -406,7 +407,7 @@ class UnifiedContentIndexer:
                 all_chunks.append(chunk)
                 global_chunk_idx += 1
 
-        print(f"✅ נוצרו {len(all_chunks)} חתיכות מבוססות משפטים")
+        logger.info(f"✅ נוצרו {len(all_chunks)} חתיכות מבוססות משפטים")
         return all_chunks
 
     def get_stats(self) -> Dict:
@@ -432,15 +433,15 @@ class UnifiedContentIndexer:
                 "document_chunks": doc_count
             }
 
-            print(f"📊 Unified Index Statistics:")
-            print(f"  📄 Total chunks: {total_docs}")
-            print(f"  🎥 Video chunks: {video_count}")
-            print(f"  📝 Document chunks: {doc_count}")
+            logger.info(f"📊 Unified Index Statistics:")
+            logger.info(f"  📄 Total chunks: {total_docs}")
+            logger.info(f"  🎥 Video chunks: {video_count}")
+            logger.info(f"  📝 Document chunks: {doc_count}")
 
             return stats
 
         except Exception as e:
-            print(f"❌ Error getting stats: {e}")
+            logger.info(f"❌ Error getting stats: {e}")
             return {}
 
     def delete_content_by_source(self, source_id: str, content_type: str = None) -> Dict:
@@ -463,7 +464,7 @@ class UnifiedContentIndexer:
             else:
                 filter_query = f"source_id eq '{source_id}'"
 
-            print(f"🔍 מחפש תוכן למחיקה: {filter_query}")
+            logger.info(f"🔍 מחפש תוכן למחיקה: {filter_query}")
 
             # חיפוש כל המסמכים הקשורים למקור
             results = search_client.search(
@@ -484,7 +485,7 @@ class UnifiedContentIndexer:
             total_found = results.get_count()
 
             if not docs_to_delete:
-                print(f"⚠️ לא נמצא תוכן למחיקה עבור source_id: {source_id}")
+                logger.info(f"⚠️ לא נמצא תוכן למחיקה עבור source_id: {source_id}")
                 return {
                     "success": True,
                     "deleted_count": 0,
@@ -492,9 +493,9 @@ class UnifiedContentIndexer:
                     "message": "לא נמצא תוכן למחיקה"
                 }
 
-            print(f"🗑️ נמצאו {total_found} chunks למחיקה:")
-            print(f"  📄 Video chunks: {chunks_by_type['video']}")
-            print(f"  📝 Document chunks: {chunks_by_type['document']}")
+            logger.info(f"🗑️ נמצאו {total_found} chunks למחיקה:")
+            logger.info(f"  📄 Video chunks: {chunks_by_type['video']}")
+            logger.info(f"  📝 Document chunks: {chunks_by_type['document']}")
 
             # ביצוע המחיקה
             delete_results = search_client.delete_documents(docs_to_delete)
@@ -504,9 +505,9 @@ class UnifiedContentIndexer:
             failed_deletes = len(delete_results) - successful_deletes
 
             if failed_deletes > 0:
-                print(f"⚠️ {failed_deletes} מחיקות נכשלו")
+                logger.info(f"⚠️ {failed_deletes} מחיקות נכשלו")
 
-            print(f"✅ נמחקו בהצלחה {successful_deletes} chunks עבור {source_id}")
+            logger.info(f"✅ נמחקו בהצלחה {successful_deletes} chunks עבור {source_id}")
 
             # עדכון סטטיסטיקות
             self.get_stats()
@@ -522,7 +523,7 @@ class UnifiedContentIndexer:
             }
 
         except Exception as e:
-            print(f"❌ שגיאה במחיקת תוכן: {e}")
+            logger.info(f"❌ שגיאה במחיקת תוכן: {e}")
             return {
                 "success": False,
                 "deleted_count": 0,
@@ -547,7 +548,7 @@ class UnifiedContentIndexer:
     #
     #         # זיהוי סוג התוכן
     #         content_type = _detect_content_type_from_path(blob_path)
-    #         print(f"🔄 מעדכן קובץ: {blob_path} (סוג: {content_type})")
+    #         logger.info(f"🔄 מעדכן קובץ: {blob_path} (סוג: {content_type})")
     #
     #         # קריאת הקובץ החדש
     #         if content_type == "video":
@@ -575,7 +576,7 @@ class UnifiedContentIndexer:
     #         existing_count = existing_results.get_count()
     #
     #         if existing_count == 0 and not force_update:
-    #             print(f"⚠️ הקובץ {source_id} לא קיים באינדקס")
+    #             logger.info(f"⚠️ הקובץ {source_id} לא קיים באינדקס")
     #             return {
     #                 "success": False,
     #                 "source_id": source_id,
@@ -584,7 +585,7 @@ class UnifiedContentIndexer:
     #
     #         # מחיקת הגרסה הישנה (אם קיימת)
     #         if existing_count > 0:
-    #             print(f"🗑️ מוחק גרסה ישנה של {source_id} ({existing_count} chunks)")
+    #             logger.info(f"🗑️ מוחק גרסה ישנה של {source_id} ({existing_count} chunks)")
     #             delete_result = self.delete_content_by_source(source_id, content_type)
     #             if not delete_result["success"]:
     #                 return {
@@ -595,7 +596,7 @@ class UnifiedContentIndexer:
     #                 }
     #
     #         # הוספת הגרסה החדשה
-    #         print(f"➕ מוסיף גרסה חדשה של {source_id}")
+    #         logger.info(f"➕ מוסיף גרסה חדשה של {source_id}")
     #         index_result = index_content_files([blob_path], create_new_index=False)
     #
     #         # בדיקה אם ההוספה הצליחה
@@ -609,8 +610,8 @@ class UnifiedContentIndexer:
     #             )
     #             new_count = new_results.get_count()
     #
-    #             print(f"✅ עדכון הושלם בהצלחה עבור {source_id}")
-    #             print(f"  📊 Chunks חדשים: {new_count}")
+    #             logger.info(f"✅ עדכון הושלם בהצלחה עבור {source_id}")
+    #             logger.info(f"  📊 Chunks חדשים: {new_count}")
     #
     #             return {
     #                 "success": True,
@@ -629,7 +630,7 @@ class UnifiedContentIndexer:
     #             }
     #
     #     except Exception as e:
-    #         print(f"❌ שגיאה בעדכון קובץ: {e}")
+    #         logger.info(f"❌ שגיאה בעדכון קובץ: {e}")
     #         return {
     #             "success": False,
     #             "source_id": source_id if 'source_id' in locals() else "unknown",
@@ -678,11 +679,11 @@ class UnifiedContentIndexer:
 
             sources_list = list(sources.values())
 
-            print(f"📋 רשימת מקורות באינדקס:")
-            print(f"  📊 סה״כ מקורות: {len(sources_list)}")
+            logger.info(f"📋 רשימת מקורות באינדקס:")
+            logger.info(f"  📊 סה״כ מקורות: {len(sources_list)}")
 
             for source in sources_list:
-                print(f"  🔹 {source['source_id']} ({source['content_type']}) - {source['chunk_count']} chunks")
+                logger.info(f"  🔹 {source['source_id']} ({source['content_type']}) - {source['chunk_count']} chunks")
 
             return {
                 "success": True,
@@ -692,7 +693,7 @@ class UnifiedContentIndexer:
             }
 
         except Exception as e:
-            print(f"❌ שגיאה בהצגת מקורות: {e}")
+            logger.info(f"❌ שגיאה בהצגת מקורות: {e}")
             return {
                 "success": False,
                 "sources": [],
@@ -722,7 +723,7 @@ def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Dict:
     Parse video MD file from blob storage and convert to structured data format expected by indexer
     """
 
-    print(f"📖 Reading video MD file from blob: {blob_path}")
+    logger.info(f"📖 Reading video MD file from blob: {blob_path}")
 
     # Download content from blob to memory
     file_bytes = blob_manager.download_to_memory(blob_path)
@@ -816,12 +817,12 @@ def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Dict:
         "transcript_segments": transcript_segments
     }
 
-    print(f"✅ Parsed video MD file:")
-    print(f"  - Video ID: {video_id}")
-    print(f"  - Total Duration: {total_duration_str} ({total_duration_seconds} seconds)")
-    print(f"  - Segments: {len(transcript_segments)}")
-    print(f"  - Keywords: {len(keywords)}")
-    print(f"  - Topics: {len(topics)}")
+    logger.info(f"✅ Parsed video MD file:")
+    logger.info(f"  - Video ID: {video_id}")
+    logger.info(f"  - Total Duration: {total_duration_str} ({total_duration_seconds} seconds)")
+    logger.info(f"  - Segments: {len(transcript_segments)}")
+    logger.info(f"  - Keywords: {len(keywords)}")
+    logger.info(f"  - Topics: {len(topics)}")
 
     return structured_data
 
@@ -861,7 +862,7 @@ def parse_document_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Di
     """
     Parse document MD file from blob storage and convert to document data format expected by indexer
     """
-    print(f"📖 Reading document MD file from blob: {blob_path}")
+    logger.info(f"📖 Reading document MD file from blob: {blob_path}")
 
     # Download content from blob to memory
     file_bytes = blob_manager.download_to_memory(blob_path)
@@ -881,7 +882,7 @@ def parse_document_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Di
         "type": "markdown"
     }
 
-    print(f"✅ Parsed document MD file")
+    logger.info(f"✅ Parsed document MD file")
     return document_data
 
 
@@ -909,23 +910,23 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
     processed_documents = 0
     skipped_files = 0
 
-    print(f"📁 מעבד {len(blob_paths)} קבצי MD מ-blob storage...")
+    logger.info(f"📁 מעבד {len(blob_paths)} קבצי MD מ-blob storage...")
 
     for blob_path in blob_paths:
         try:
-            print(f"🔄 מעבד קובץ: {blob_path}")
+            logger.info(f"🔄 מעבד קובץ: {blob_path}")
 
             # זיהוי סוג הקובץ מתוך ה-path
             content_type = _detect_content_type_from_path(blob_path)
-            print(f"  📋 זוהה כסוג: {content_type}")
+            logger.info(f"  📋 זוהה כסוג: {content_type}")
 
             if content_type == "video":
-                print(f'content type: {content_type}')
+                logger.info(f'content type: {content_type}')
                 # עיבוד קובץ וידאו
                 video_data = parse_video_md_from_blob(blob_path, blob_manager)
                 segments = video_data.get("transcript_segments", [])
                 if not segments:
-                    print(f"⚠️ קובץ {blob_path} לא מכיל תמלול, מדלגים.")
+                    logger.info(f"⚠️ קובץ {blob_path} לא מכיל תמלול, מדלגים.")
                     skipped_files += 1
                     continue
 
@@ -965,24 +966,24 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                     }
 
                     # הדפסת מפורטת של כל השדות שנכנסים לאינדקס
-                    print(f"\n    🎥 VIDEO CHUNK #{i + 1} - פרטים מלאים:")
-                    print(f"    {'='*70}")
-                    print(f"    🆔 ID: {doc['id']}")
-                    print(f"    📋 Content Type: {doc['content_type']}")
-                    print(f"    📋 Source ID: {doc['source_id']}")
-                    print(f"    📋 Chunk Index: {doc['chunk_index']}")
-                    print(f"    📅 Created Date: {doc['created_date']}")
-                    print(f"    ⏰ Start Time: {doc['start_time']}")
-                    print(f"    ⏰ End Time: {doc['end_time']}")
-                    print(f"    📑 Section Title: {doc['section_title']}")
-                    print(f"    🔍 Keywords: {doc['keywords']}")
-                    print(f"    🏷️ Topics: {doc['topics']}")
-                    print(f"    📊 Vector: [embedding array of {len(doc['vector'])} dimensions]")
-                    print(f"    📝 Text Content:")
-                    print(f"    {'-'*50}")
-                    print(f"    {doc['text']}")
-                    print(f"    {'-'*50}")
-                    print(f"    {'='*70}\n")
+                    logger.info(f"\n    🎥 VIDEO CHUNK #{i + 1} - פרטים מלאים:")
+                    logger.info(f"    {'='*70}")
+                    logger.info(f"    🆔 ID: {doc['id']}")
+                    logger.info(f"    📋 Content Type: {doc['content_type']}")
+                    logger.info(f"    📋 Source ID: {doc['source_id']}")
+                    logger.info(f"    📋 Chunk Index: {doc['chunk_index']}")
+                    logger.info(f"    📅 Created Date: {doc['created_date']}")
+                    logger.info(f"    ⏰ Start Time: {doc['start_time']}")
+                    logger.info(f"    ⏰ End Time: {doc['end_time']}")
+                    logger.info(f"    📑 Section Title: {doc['section_title']}")
+                    logger.info(f"    🔍 Keywords: {doc['keywords']}")
+                    logger.info(f"    🏷️ Topics: {doc['topics']}")
+                    logger.info(f"    📊 Vector: [embedding array of {len(doc['vector'])} dimensions]")
+                    logger.info(f"    📝 Text Content:")
+                    logger.info(f"    {'-'*50}")
+                    logger.info(f"    {doc['text']}")
+                    logger.info(f"    {'-'*50}")
+                    logger.info(f"    {'='*70}\n")
 
                     all_docs.append(doc)
                 processed_videos += 1
@@ -992,7 +993,7 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                 doc_data = parse_document_md_from_blob(blob_path, blob_manager)
                 markdown_content = doc_data.get("content", "")
                 if not markdown_content:
-                    print(f"⚠️ קובץ {blob_path} ריק או לא נטען, מדלגים.")
+                    logger.info(f"⚠️ קובץ {blob_path} ריק או לא נטען, מדלגים.")
                     skipped_files += 1
                     continue
 
@@ -1029,45 +1030,45 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                     }
 
                     # הדפסת מפורטת של כל השדות שנכנסים לאינדקס
-                    print(f"\n    📝 DOCUMENT CHUNK #{i + 1} - פרטים מלאים:")
-                    print(f"    {'='*70}")
-                    print(f"    🆔 ID: {doc['id']}")
-                    print(f"    📋 Content Type: {doc['content_type']}")
-                    print(f"    📋 Source ID: {doc['source_id']}")
-                    print(f"    📋 Chunk Index: {doc['chunk_index']}")
-                    print(f"    📅 Created Date: {doc['created_date']}")
-                    print(f"    ⏰ Start Time: {doc['start_time']}")
-                    print(f"    ⏰ End Time: {doc['end_time']}")
-                    print(f"    📑 Section Title: {doc['section_title']}")
-                    print(f"    🔍 Keywords: {doc['keywords']}")
-                    print(f"    🏷️ Topics: {doc['topics']}")
-                    print(f"    📊 Vector: [embedding array of {len(doc['vector'])} dimensions]")
-                    print(f"    📝 Text Content:")
-                    print(f"    {'-'*50}")
-                    print(f"    {doc['text']}")
-                    print(f"    {'-'*50}")
-                    print(f"    {'='*70}\n")
+                    logger.info(f"\n    📝 DOCUMENT CHUNK #{i + 1} - פרטים מלאים:")
+                    logger.info(f"    {'='*70}")
+                    logger.info(f"    🆔 ID: {doc['id']}")
+                    logger.info(f"    📋 Content Type: {doc['content_type']}")
+                    logger.info(f"    📋 Source ID: {doc['source_id']}")
+                    logger.info(f"    📋 Chunk Index: {doc['chunk_index']}")
+                    logger.info(f"    📅 Created Date: {doc['created_date']}")
+                    logger.info(f"    ⏰ Start Time: {doc['start_time']}")
+                    logger.info(f"    ⏰ End Time: {doc['end_time']}")
+                    logger.info(f"    📑 Section Title: {doc['section_title']}")
+                    logger.info(f"    🔍 Keywords: {doc['keywords']}")
+                    logger.info(f"    🏷️ Topics: {doc['topics']}")
+                    logger.info(f"    📊 Vector: [embedding array of {len(doc['vector'])} dimensions]")
+                    logger.info(f"    📝 Text Content:")
+                    logger.info(f"    {'-'*50}")
+                    logger.info(f"    {doc['text']}")
+                    logger.info(f"    {'-'*50}")
+                    logger.info(f"    {'='*70}\n")
 
 
                     all_docs.append(doc)
                 processed_documents += 1
 
             else:
-                print(f"❌ לא ניתן לזהות סוג קובץ עבור: {blob_path}")
+                logger.info(f"❌ לא ניתן לזהות סוג קובץ עבור: {blob_path}")
                 skipped_files += 1
                 continue
 
         except Exception as e:
-            print(f"❌ שגיאה בעיבוד הקובץ {blob_path}: {e}")
+            logger.info(f"❌ שגיאה בעיבוד הקובץ {blob_path}: {e}")
             skipped_files += 1
             continue
 
     # הצג סיכום עיבוד
-    print(f"\n📊 סיכום עיבוד:")
-    print(f"  🎥 קבצי וידאו שעובדו: {processed_videos}")
-    print(f"  📝 קבצי מסמכים שעובדו: {processed_documents}")
-    print(f"  ⚠️ קבצים שדולגו: {skipped_files}")
-    print(f"  📄 סה״כ chunks שנוצרו: {len(all_docs)}")
+    logger.info(f"\n📊 סיכום עיבוד:")
+    logger.info(f"  🎥 קבצי וידאו שעובדו: {processed_videos}")
+    logger.info(f"  📝 קבצי מסמכים שעובדו: {processed_documents}")
+    logger.info(f"  ⚠️ קבצים שדולגו: {skipped_files}")
+    logger.info(f"  📄 סה״כ chunks שנוצרו: {len(all_docs)}")
 
     # העלאה לאינדקס - משתמש ב INDEX_NAME מהקונפיג
     if all_docs:
@@ -1089,10 +1090,10 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
 
 def main():
     """Main function - demonstrates usage with automatic type detection and new functions"""
-    print("🚀 Unified Content Indexer - Videos + Documents")
-    print("=" * 60)
+    logger.info("🚀 Unified Content Indexer - Videos + Documents")
+    logger.info("=" * 60)
 
-    print("\n🎯 יצירת אינדקס מאוחד עם זיהוי אוטומטי של סוג הקובץ")
+    logger.info("\n🎯 יצירת אינדקס מאוחד עם זיהוי אוטומטי של סוג הקובץ")
 
     # Define blob paths to process - type will be auto-detected from path
     blob_paths = [
@@ -1101,22 +1102,22 @@ def main():
     ]
 
     result = index_content_files(blob_paths, create_new_index=True)
-    print("debug")
-    print(f"\n{result}")
+    logger.info("debug")
+    logger.info(f"\n{result}")
 
     # # בדיקת הפונקציות החדשות
-    # print("\n" + "=" * 60)
-    # print("🧪 בדיקת פונקציות מחיקה ועדכון חדשות")
-    # print("=" * 60)
+    # logger.info("\n" + "=" * 60)
+    # logger.info("🧪 בדיקת פונקציות מחיקה ועדכון חדשות")
+    # logger.info("=" * 60)
     #
     # indexer = UnifiedContentIndexer()
     #
     # # 1. הצגת סטטיסטיקות ראשוניות
-    # print("\n📊 סטטיסטיקות ראשוניות:")
+    # logger.info("\n📊 סטטיסטיקות ראשוניות:")
     # initial_stats = indexer.get_stats()
     #
     # # 2. הצגת רשימת מקורות
-    # print("\n📋 רשימת מקורות באינדקס:")
+    # logger.info("\n📋 רשימת מקורות באינדקס:")
     # sources_result = indexer.list_content_sources()
     #
     # if sources_result["success"] and sources_result["sources"]:
@@ -1124,45 +1125,45 @@ def main():
     #     source_id = "2"
     #     content_type = "video"
     #
-    #     print(f"\n🔍 פרטי המקור הראשון לבדיקה:")
-    #     print(f"  📋 source_id: {source_id}")
-    #     print(f"  📋 content_type: {content_type}")
+    #     logger.info(f"\n🔍 פרטי המקור הראשון לבדיקה:")
+    #     logger.info(f"  📋 source_id: {source_id}")
+    #     logger.info(f"  📋 content_type: {content_type}")
     #
-    #     print(f"\n🗑️ בדיקת מחיקה עבור מקור: {source_id} (סוג: {content_type})")
+    #     logger.info(f"\n🗑️ בדיקת מחיקה עבור מקור: {source_id} (סוג: {content_type})")
     #
     #     # ביצוע מחיקה ישירות
-    #     print(f"  📄 מוחק סרטון עם ID 2...")
+    #     logger.info(f"  📄 מוחק סרטון עם ID 2...")
     #
     #     # ביצוע מחיקה
     #     delete_result = indexer.delete_content_by_source(source_id, content_type)
-    #     print(f"  🔄 תוצאת מחיקה: {delete_result['message']}")
+    #     logger.info(f"  🔄 תוצאת מחיקה: {delete_result['message']}")
     #
     #     # בדיקת סטטיסטיקות אחרי מחיקה
-    #     print("\n📊 סטטיסטיקות אחרי מחיקה:")
+    #     logger.info("\n📊 סטטיסטיקות אחרי מחיקה:")
     #     after_delete_stats = indexer.get_stats()
 
 
     #     # # סיכום הבדיקה
-    #     # print("\n✅ סיכום בדיקת הפונקציות החדשות:")
-    #     # print(f"  📄 Chunks התחלתיים: {initial_stats.get('total_chunks', 0)}")
-    #     # print(f"  📄 Chunks אחרי מחיקה: {after_delete_stats.get('total_chunks', 0)}")
-    #     # print(f"  📄 Chunks סופיים: {final_stats.get('total_chunks', 0)}")
+    #     # logger.info("\n✅ סיכום בדיקת הפונקציות החדשות:")
+    #     # logger.info(f"  📄 Chunks התחלתיים: {initial_stats.get('total_chunks', 0)}")
+    #     # logger.info(f"  📄 Chunks אחרי מחיקה: {after_delete_stats.get('total_chunks', 0)}")
+    #     # logger.info(f"  📄 Chunks סופיים: {final_stats.get('total_chunks', 0)}")
     #     #
     #     # if delete_result["success"]:
-    #     #     print("  ✅ פונקציית מחיקה עובדת תקין")
+    #     #     logger.info("  ✅ פונקציית מחיקה עובדת תקין")
     #     # else:
-    #     #     print("  ❌ פונקציית מחיקה נכשלה")
+    #     #     logger.info("  ❌ פונקציית מחיקה נכשלה")
     #
     #     # if update_result["success"]:
-    #     #     print("  ✅ פונקציית עדכון עובדת תקין")
+    #     #     logger.info("  ✅ פונקציית עדכון עובדת תקין")
     #     # else:
-    #     #     print("  ❌ פונקציית עדכון נכשלה")
+    #     #     logger.info("  ❌ פונקציית עדכון נכשלה")
     #
     # else:
-    #     print("⚠️ לא נמצאו מקורות באינדקס לבדיקה")
-    #     print("💡 הרץ קודם את הפונקציה index_content_files כדי להוסיף תוכן לאינדקס")
+    #     logger.info("⚠️ לא נמצאו מקורות באינדקס לבדיקה")
+    #     logger.info("💡 הרץ קודם את הפונקציה index_content_files כדי להוסיף תוכן לאינדקס")
 
 
 if __name__ == "__main__":
-    print("running")
+    logger.info("running")
     main()

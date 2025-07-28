@@ -4,7 +4,8 @@ from azure.core.credentials import AzureKeyCredential
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from Source.Services.blob_manager import BlobManager
 from Config.config import AZURE_FORM_RECOGNIZER_KEY, AZURE_FORM_RECOGNIZER_ENDPOINT
-
+from Config.logging_config import setup_logging
+logger = setup_logging()
 client = DocumentIntelligenceClient(
     endpoint=AZURE_FORM_RECOGNIZER_ENDPOINT,
     credential=AzureKeyCredential(AZURE_FORM_RECOGNIZER_KEY)
@@ -17,11 +18,11 @@ def process_single_document(file_path: str) -> str | None:
     and returns a Markdown string (or None if it failed).
     """
     if not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
+        logger.info(f"❌ File not found: {file_path}")
         return None
 
     work_path = file_path
-    print(f"🔍 Processing {work_path} → MD File")
+    logger.info(f"🔍 Processing {work_path} → MD File")
 
     try:
         # use Azure Document Intelligence
@@ -37,7 +38,7 @@ def process_single_document(file_path: str) -> str | None:
         return md
 
     except Exception as e:
-        print(f"❌ Error in Azure DI for {work_path}: {e}")
+        logger.info(f"❌ Error in Azure DI for {work_path}: {e}")
         return None
 
 
@@ -52,7 +53,7 @@ def process_document_from_memory(file_bytes: bytes) -> str | None:
         Markdown string or None if failed
     """
     try:
-        print(f"🔍 Processing document from memory ({len(file_bytes)} bytes) → MD")
+        logger.info(f"🔍 Processing document from memory ({len(file_bytes)} bytes) → MD")
 
         # Create BytesIO object from bytes
         file_buffer = BytesIO(file_bytes)
@@ -69,7 +70,7 @@ def process_document_from_memory(file_bytes: bytes) -> str | None:
         return md
 
     except Exception as e:
-        print(f"❌ Error in Azure DI for memory buffer: {e}")
+        logger.info(f"❌ Error in Azure DI for memory buffer: {e}")
         return None
 
 
@@ -97,23 +98,23 @@ def document_to_markdown(course_id: str, section_id: str, file_id: int, document
     file_ext = os.path.splitext(document_url)[1].lower()
 
     if file_ext not in supported_extensions:
-        print(f"❌ סוג קובץ לא נתמך: {document_url}")
+        logger.info(f"❌ סוג קובץ לא נתמך: {document_url}")
         return None
 
-    print(f"🌐 מוריד קובץ מקונטיינר raw-data: {document_url}")
+    logger.info(f"🌐 מוריד קובץ מקונטיינר raw-data: {document_url}")
 
     # Step 1: Download blob directly to memory from raw-data container
     file_bytes = blob_manager_read.download_to_memory(document_url)
     if not file_bytes:
-        print(f"❌ נכשלה הורדת הקובץ לזיכרון מקונטיינר raw-data: {document_url}")
+        logger.info(f"❌ נכשלה הורדת הקובץ לזיכרון מקונטיינר raw-data: {document_url}")
         return None
 
-    print(f"🔄 מעבד קובץ בזיכרון: {document_name}")
+    logger.info(f"🔄 מעבד קובץ בזיכרון: {document_name}")
 
     # Step 2: Process document directly from memory
     md_content = process_document_from_memory(file_bytes)
     if not md_content:
-        print(f"❌ נכשל עיבוד הקובץ: {document_name}")
+        logger.info(f"❌ נכשל עיבוד הקובץ: {document_name}")
         return None
 
     # הוספת שם המסמך לתחילת התמלול
@@ -123,7 +124,7 @@ def document_to_markdown(course_id: str, section_id: str, file_id: int, document
     # יצירת נתיב לפי המבנה: CourseID/SectionID/Docs_md/FileID.md
     target_blob_path = f"{course_id}/{section_id}/Docs_md/{file_id}.md"
 
-    print(f"📤 מעלה markdown לקונטיינר processeddata: {target_blob_path}")
+    logger.info(f"📤 מעלה markdown לקונטיינר processeddata: {target_blob_path}")
 
     success = blob_manager_write.upload_text_to_blob(
         text_content=enhanced_md_content,
@@ -131,10 +132,10 @@ def document_to_markdown(course_id: str, section_id: str, file_id: int, document
     )
 
     if success:
-        print(f"✅ הקובץ הועלה בהצלחה לקונטיינר processeddata: {target_blob_path}")
+        logger.info(f"✅ הקובץ הועלה בהצלחה לקונטיינר processeddata: {target_blob_path}")
         return target_blob_path
     else:
-        print(f"❌ נכשלה העלאת הקובץ לקונטיינר processeddata")
+        logger.info(f"❌ נכשלה העלאת הקובץ לקונטיינר processeddata")
         return None
 
 
@@ -148,14 +149,14 @@ if __name__ == "__main__":
     # document_url = "Section1/Raw-data/Docs/bdida_tirgul_02.pdf"
     document_url = "bdida_tirgul_02.pdf"
 
-    print(f"🧪 מעבד קובץ: {document_name}")
-    print(f"📍 CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
-    print(f"🔗 DocumentURL: {document_url}")
+    logger.info(f"🧪 מעבד קובץ: {document_name}")
+    logger.info(f"📍 CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
+    logger.info(f"🔗 DocumentURL: {document_url}")
 
     # Process the document
     result = document_to_markdown(course_id, section_id, file_id, document_name, document_url)
 
     if result:
-        print(f"\n🎉 הקובץ עובד בהצלחה: {result}")
+        logger.info(f"\n🎉 הקובץ עובד בהצלחה: {result}")
     else:
-        print(f"\n❌ נכשל עיבוד הקובץ: {document_name}")
+        logger.info(f"\n❌ נכשל עיבוד הקובץ: {document_name}")

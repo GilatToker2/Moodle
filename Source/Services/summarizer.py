@@ -15,7 +15,8 @@ from Config.config import (
     CONTAINER_NAME
 )
 from Source.Services.blob_manager import BlobManager
-
+from Config.logging_config import setup_logging
+logger = setup_logging()
 
 class ContentSummarizer:
     """
@@ -40,7 +41,7 @@ class ContentSummarizer:
 
         # יצירת BlobManager לגישה לקבצים ב-blob storage
         self.blob_manager = BlobManager()
-        print(f"✅ ContentSummarizer initialized with model: {self.model_name}")
+        logger.info(f"✅ ContentSummarizer initialized with model: {self.model_name}")
 
     def _get_video_summary_prompt(self, subject_type: str = None, existing_summary: str = None) -> str:
         """הכנת prompt לסיכום וידאו עם התאמה לסוג המקצוע וסיכום בסיסי אם קיים"""
@@ -220,7 +221,7 @@ class ContentSummarizer:
         Returns:
             מילון עם החלקים השונים של הקובץ
         """
-        print(f"📖 Parsing video MD file: {md_file_path}")
+        logger.info(f"📖 Parsing video MD file: {md_file_path}")
 
         if not os.path.exists(md_file_path):
             raise FileNotFoundError(f"קובץ לא נמצא: {md_file_path}")
@@ -290,46 +291,46 @@ class ContentSummarizer:
             elif current_section == "full_transcript":
                 full_transcript = '\n'.join(section_content).strip()
 
-        # print(f"🔍 Detected subject type: {subject_type}")
-        # print(f"📝 Existing summary length: {len(existing_summary) if existing_summary else 0} chars")
-        # print(f"📄 Full transcript length: {len(full_transcript) if full_transcript else 0} chars")
+        # logger.info(f"🔍 Detected subject type: {subject_type}")
+        # logger.info(f"📝 Existing summary length: {len(existing_summary) if existing_summary else 0} chars")
+        # logger.info(f"📄 Full transcript length: {len(full_transcript) if full_transcript else 0} chars")
         #
         # # הדפסת תוכן מפורט
-        # print("\n" + "=" * 60)
-        # print("📋 PARSED CONTENT DETAILS:")
-        # print("=" * 60)
+        # logger.info("\n" + "=" * 60)
+        # logger.info("📋 PARSED CONTENT DETAILS:")
+        # logger.info("=" * 60)
         #
-        # print(f"\n🎓 SUBJECT TYPE:")
+        # logger.info(f"\n🎓 SUBJECT TYPE:")
         # if subject_type:
-        #     print(f"'{subject_type}'")
+        #     logger.info(f"'{subject_type}'")
         # else:
-        #     print("None")
+        #     logger.info("None")
         #
-        # print(f"\n📝 EXISTING SUMMARY:")
+        # logger.info(f"\n📝 EXISTING SUMMARY:")
         # if existing_summary:
-        #     print(f"'{existing_summary}'")
+        #     logger.info(f"'{existing_summary}'")
         # else:
-        #     print("None")
+        #     logger.info("None")
 
-        # print(f"\n📄 TRANSCRIPT PREVIEW:")
+        # logger.info(f"\n📄 TRANSCRIPT PREVIEW:")
         # if full_transcript:
         #     lines = full_transcript.split('\n')
         #     if len(lines) > 4:
-        #         print("First 2 lines:")
+        #         logger.info("First 2 lines:")
         #         for i, line in enumerate(lines[:2]):
-        #             print(f"  {i + 1}: {line}")
-        #         print("  ...")
-        #         print("Last 2 lines:")
+        #             logger.info(f"  {i + 1}: {line}")
+        #         logger.info("  ...")
+        #         logger.info("Last 2 lines:")
         #         for i, line in enumerate(lines[-2:], len(lines) - 1):
-        #             print(f"  {i}: {line}")
+        #             logger.info(f"  {i}: {line}")
         #     else:
-        #         print("Full transcript (short):")
+        #         logger.info("Full transcript (short):")
         #         for i, line in enumerate(lines):
-        #             print(f"  {i + 1}: {line}")
+        #             logger.info(f"  {i + 1}: {line}")
         # else:
-        #     print("None")
+        #     logger.info("None")
         #
-        # print("=" * 60)
+        # logger.info("=" * 60)
 
         return {
             "subject_type": subject_type,
@@ -351,14 +352,14 @@ class ContentSummarizer:
         Returns:
             הסיכום שנוצר
         """
-        print(f"📝 Creating summary for {content_type} content...")
-        print(f"📊 Content length: {len(content)} characters")
+        logger.info(f"📝 Creating summary for {content_type} content...")
+        logger.info(f"📊 Content length: {len(content)} characters")
 
         try:
             # בחירת prompt לפי סוג התוכן
             if content_type.lower() == "video":
-                print(f"🎓 Subject type: {subject_type}")
-                print(f"📝 Has existing summary: {bool(existing_summary)}")
+                logger.info(f"🎓 Subject type: {subject_type}")
+                logger.info(f"📝 Has existing summary: {bool(existing_summary)}")
                 system_prompt = self._get_video_summary_prompt(
                     subject_type=subject_type,
                     existing_summary=existing_summary
@@ -379,7 +380,7 @@ class ContentSummarizer:
             ]
 
             # קריאה למודל השפה
-            print(f"🤖 Calling {self.model_name} for summarization...")
+            logger.info(f"🤖 Calling {self.model_name} for summarization...")
             response = self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
@@ -390,13 +391,13 @@ class ContentSummarizer:
 
             summary = response.choices[0].message.content
 
-            print(f"✅ Summary created successfully!")
-            print(f"📊 Summary length: {len(summary)} characters")
+            logger.info(f"✅ Summary created successfully!")
+            logger.info(f"📊 Summary length: {len(summary)} characters")
 
             return summary
 
         except Exception as e:
-            print(f"❌ Error creating summary: {e}")
+            logger.info(f"❌ Error creating summary: {e}")
             return f"שגיאה ביצירת סיכום: {str(e)}"
 
     def _detect_content_type_from_path(self, blob_path: str) -> str:
@@ -435,35 +436,35 @@ class ContentSummarizer:
         Returns:
             נתיב הסיכום בבלוב או None אם נכשל
         """
-        print(f"📖 Processing MD file from blob: {blob_path}")
+        logger.info(f"📖 Processing MD file from blob: {blob_path}")
 
         try:
             # זיהוי סוג התוכן מתוך ה-path
             content_type = self._detect_content_type_from_path(blob_path)
-            print(f"  📋 זוהה כסוג: {content_type}")
+            logger.info(f"  📋 זוהה כסוג: {content_type}")
 
             if content_type == "unknown":
-                print(f"❌ לא ניתן לזהות סוג קובץ עבור: {blob_path}")
+                logger.info(f"❌ לא ניתן לזהות סוג קובץ עבור: {blob_path}")
                 return None
 
             # הורדת הקובץ מהבלוב
             temp_file_path = f"temp_{os.path.basename(blob_path)}"
 
             if not self.blob_manager.download_file(blob_path, temp_file_path):
-                print(f"❌ נכשל בהורדת הקובץ מהבלוב: {blob_path}")
+                logger.info(f"❌ נכשל בהורדת הקובץ מהבלוב: {blob_path}")
                 return None
 
             try:
                 # אם זה קובץ וידאו - עבור לפארסינג מתקדם
                 if content_type == "video":
-                    print("🎬 Video file detected - using enhanced parsing and summarization")
+                    logger.info("🎬 Video file detected - using enhanced parsing and summarization")
 
                     # פרסור הקובץ לחלקים השונים
                     parsed_data = self.parse_video_md_file(temp_file_path)
 
                     # בדיקה שיש טרנסקריפט
                     if not parsed_data.get("full_transcript"):
-                        print(f"❌ לא נמצא טרנסקריפט בקובץ הוידאו")
+                        logger.info(f"❌ לא נמצא טרנסקריפט בקובץ הוידאו")
                         return None
 
                     # יצירת סיכום עם הפרמטרים שנפרסרו
@@ -476,13 +477,13 @@ class ContentSummarizer:
 
                 # אם זה מסמך רגיל - טיפול סטנדרטי
                 else:
-                    print("📄 Document file - using standard processing")
+                    logger.info("📄 Document file - using standard processing")
                     # קריאת הקובץ
                     with open(temp_file_path, 'r', encoding='utf-8') as f:
                         content = f.read()
 
                     if not content.strip():
-                        print(f"❌ הקובץ ריק")
+                        logger.info(f"❌ הקובץ ריק")
                         return None
 
                     # יצירת הסיכום
@@ -490,16 +491,16 @@ class ContentSummarizer:
 
                 # בדיקה שהסיכום נוצר בהצלחה
                 if not summary or summary.startswith("שגיאה"):
-                    print(f"❌ נכשל ביצירת הסיכום")
+                    logger.info(f"❌ נכשל ביצירת הסיכום")
                     return None
 
                 # שמירת הסיכום לבלוב
                 blob_summary_path = self._save_summary_to_blob(summary, blob_path)
                 if blob_summary_path:
-                    print(f"✅ Summary saved to blob: {blob_summary_path}")
+                    logger.info(f"✅ Summary saved to blob: {blob_summary_path}")
                     return blob_summary_path
                 else:
-                    print(f"❌ נכשלה שמירת הסיכום לבלוב")
+                    logger.info(f"❌ נכשלה שמירת הסיכום לבלוב")
                     return None
 
             finally:
@@ -508,7 +509,7 @@ class ContentSummarizer:
                     os.remove(temp_file_path)
 
         except Exception as e:
-            print(f"❌ שגיאה בעיבוד הקובץ: {str(e)}")
+            logger.info(f"❌ שגיאה בעיבוד הקובץ: {str(e)}")
             return None
 
     def _save_summary_to_blob(self, summary: str, original_blob_path: str) -> str:
@@ -528,7 +529,7 @@ class ContentSummarizer:
             path_parts = original_blob_path.split('/')
 
             if len(path_parts) < 4:
-                print(f"❌ נתיב לא תקין: {original_blob_path}")
+                logger.info(f"❌ נתיב לא תקין: {original_blob_path}")
                 return None
 
             course_id = path_parts[0]  # CS101
@@ -542,7 +543,7 @@ class ContentSummarizer:
             # יצירת נתיב הסיכום החדש
             summary_blob_path = f"{course_id}/{section_id}/file_summaries/{base_name}.md"
 
-            print(f"📤 Saving summary to blob: {summary_blob_path}")
+            logger.info(f"📤 Saving summary to blob: {summary_blob_path}")
 
             # שמירה לבלוב
             success = self.blob_manager.upload_text_to_blob(
@@ -554,11 +555,11 @@ class ContentSummarizer:
             if success:
                 return summary_blob_path
             else:
-                print(f"❌ Failed to save summary to blob")
+                logger.info(f"❌ Failed to save summary to blob")
                 return None
 
         except Exception as e:
-            print(f"❌ Error saving summary to blob: {str(e)}")
+            logger.info(f"❌ Error saving summary to blob: {str(e)}")
             return None
 
     def summarize_section_from_blob(self, full_blob_path: str) -> str | None:
@@ -575,16 +576,16 @@ class ContentSummarizer:
             path_parts = full_blob_path.split('/')
 
             if len(path_parts) < 3:
-                print(f"❌ נתיב לא תקין: {full_blob_path}. צריך להיות בפורמט: CourseID/SectionID/file_summaries")
+                logger.info(f"❌ נתיב לא תקין: {full_blob_path}. צריך להיות בפורמט: CourseID/SectionID/file_summaries")
                 return None
 
             course_id = path_parts[0]  # CS101
             section_id = path_parts[1]  # Section1
             # path_parts[2] צריך להיות file_summaries
 
-            print(f"📁 CourseID: {course_id}")
-            print(f"📂 SectionID: {section_id}")
-            print(f"📂 נתיב file_summaries: {full_blob_path}")
+            logger.info(f"📁 CourseID: {course_id}")
+            logger.info(f"📂 SectionID: {section_id}")
+            logger.info(f"📂 נתיב file_summaries: {full_blob_path}")
 
             # יצירת BlobManager עם הקונטיינר הברירת מחדל
             blob_manager = BlobManager()
@@ -596,19 +597,19 @@ class ContentSummarizer:
             section_files = [f for f in all_files if f.startswith(full_blob_path + "/") and f.endswith(".md")]
 
             if not section_files:
-                print(f"❌ לא נמצאו קבצי סיכומים ב-{full_blob_path}")
+                logger.info(f"❌ לא נמצאו קבצי סיכומים ב-{full_blob_path}")
                 return None
 
-            print(f"📁 נמצאו {len(section_files)} קבצי סיכומים ב-{full_blob_path}:")
+            logger.info(f"📁 נמצאו {len(section_files)} קבצי סיכומים ב-{full_blob_path}:")
             for file in section_files:
-                print(f"  - {file}")
+                logger.info(f"  - {file}")
 
             # הורדה וקריאה של כל הקבצים ישירות לזיכרון
             all_content = ""
             successful_files = []
 
             for file_path in section_files:
-                print(f"\n📥 מוריד קובץ לזיכרון: {file_path}")
+                logger.info(f"\n📥 מוריד קובץ לזיכרון: {file_path}")
 
                 try:
                     # הורדת הקובץ ישירות לזיכרון
@@ -624,25 +625,25 @@ class ContentSummarizer:
                             all_content += f"{'=' * 50}\n\n"
                             all_content += file_content
                             successful_files.append(file_path)
-                            print(f"✅ קובץ נקרא בהצלחה: {len(file_content)} תווים")
+                            logger.info(f"✅ קובץ נקרא בהצלחה: {len(file_content)} תווים")
                         else:
-                            print(f"⚠️ קובץ ריק: {file_path}")
+                            logger.info(f"⚠️ קובץ ריק: {file_path}")
                     else:
-                        print(f"❌ נכשלה הורדת הקובץ: {file_path}")
+                        logger.info(f"❌ נכשלה הורדת הקובץ: {file_path}")
 
                 except Exception as e:
-                    print(f"❌ שגיאה בעיבוד קובץ {file_path}: {e}")
+                    logger.info(f"❌ שגיאה בעיבוד קובץ {file_path}: {e}")
                     continue
 
             if not successful_files:
-                print(f"❌ לא הצלחתי לקרוא אף קובץ מ-{full_blob_path}")
+                logger.info(f"❌ לא הצלחתי לקרוא אף קובץ מ-{full_blob_path}")
                 return None
 
-            print(f"\n📊 סה\"כ עובד עם {len(successful_files)} קבצים")
-            print(f"📊 אורך התוכן הכולל: {len(all_content)} תווים")
+            logger.info(f"\n📊 סה\"כ עובד עם {len(successful_files)} קבצים")
+            logger.info(f"📊 אורך התוכן הכולל: {len(all_content)} תווים")
 
             # יצירת הסיכום
-            print(f"\n🤖 יוצר סיכום section...")
+            logger.info(f"\n🤖 יוצר סיכום section...")
 
             # הכנת prompt מיוחד לסיכום section
             system_prompt = self._get_section_summary_prompt()
@@ -669,13 +670,13 @@ class ContentSummarizer:
 
             section_summary = response.choices[0].message.content
 
-            print(f"✅ סיכום section נוצר בהצלחה!")
-            print(f"📊 אורך הסיכום: {len(section_summary)} תווים")
+            logger.info(f"✅ סיכום section נוצר בהצלחה!")
+            logger.info(f"📊 אורך הסיכום: {len(section_summary)} תווים")
 
             # שמירת הסיכום לבלוב במבנה החדש: CourseID/section_summaries/SectionID.md
             summary_blob_path = f"{course_id}/section_summaries/{section_id}.md"
 
-            print(f"📤 שומר סיכום section ל-blob: {summary_blob_path}")
+            logger.info(f"📤 שומר סיכום section ל-blob: {summary_blob_path}")
 
             success = blob_manager.upload_text_to_blob(
                 text_content=section_summary,
@@ -683,14 +684,14 @@ class ContentSummarizer:
             )
 
             if success:
-                print(f"✅ סיכום section נשמר ב-blob: {summary_blob_path}")
+                logger.info(f"✅ סיכום section נשמר ב-blob: {summary_blob_path}")
                 return summary_blob_path
             else:
-                print(f"❌ נכשלה שמירת סיכום section לבלוב")
+                logger.info(f"❌ נכשלה שמירת סיכום section לבלוב")
                 return None
 
         except Exception as e:
-            print(f"❌ שגיאה בסיכום section: {str(e)}")
+            logger.info(f"❌ שגיאה בסיכום section: {str(e)}")
             return None
 
     def summarize_course_from_blob(self, full_blob_path: str) -> str | None:
@@ -707,14 +708,14 @@ class ContentSummarizer:
             path_parts = full_blob_path.split('/')
 
             if len(path_parts) < 2:
-                print(f"❌ נתיב לא תקין: {full_blob_path}. צריך להיות בפורמט: CourseID/section_summaries")
+                logger.info(f"❌ נתיב לא תקין: {full_blob_path}. צריך להיות בפורמט: CourseID/section_summaries")
                 return None
 
             course_id = path_parts[0]  # CS101
             # path_parts[1] צריך להיות section_summaries
 
-            print(f"📁 CourseID: {course_id}")
-            print(f"📂 נתיב section_summaries: {full_blob_path}")
+            logger.info(f"📁 CourseID: {course_id}")
+            logger.info(f"📂 נתיב section_summaries: {full_blob_path}")
 
             # יצירת BlobManager עם הקונטיינר הברירת מחדל
             blob_manager = BlobManager()
@@ -726,19 +727,19 @@ class ContentSummarizer:
             sections_files = [f for f in all_files if f.startswith(full_blob_path + "/") and f.endswith(".md")]
 
             if not sections_files:
-                print(f"❌ לא נמצאו קבצי סיכומי sections ב-{full_blob_path}")
+                logger.info(f"❌ לא נמצאו קבצי סיכומי sections ב-{full_blob_path}")
                 return None
 
-            print(f"📁 נמצאו {len(sections_files)} קבצי סיכומי sections:")
+            logger.info(f"📁 נמצאו {len(sections_files)} קבצי סיכומי sections:")
             for file in sections_files:
-                print(f"  - {file}")
+                logger.info(f"  - {file}")
 
             # הורדה וקריאה של כל הקבצים ישירות לזיכרון
             all_content = ""
             successful_files = []
 
             for file_path in sections_files:
-                print(f"\n📥 מוריד קובץ לזיכרון: {file_path}")
+                logger.info(f"\n📥 מוריד קובץ לזיכרון: {file_path}")
 
                 try:
                     # הורדת הקובץ ישירות לזיכרון
@@ -754,25 +755,25 @@ class ContentSummarizer:
                             all_content += f"{'=' * 50}\n\n"
                             all_content += file_content
                             successful_files.append(file_path)
-                            print(f"✅ קובץ נקרא בהצלחה: {len(file_content)} תווים")
+                            logger.info(f"✅ קובץ נקרא בהצלחה: {len(file_content)} תווים")
                         else:
-                            print(f"⚠️ קובץ ריק: {file_path}")
+                            logger.info(f"⚠️ קובץ ריק: {file_path}")
                     else:
-                        print(f"❌ נכשלה הורדת הקובץ: {file_path}")
+                        logger.info(f"❌ נכשלה הורדת הקובץ: {file_path}")
 
                 except Exception as e:
-                    print(f"❌ שגיאה בעיבוד קובץ {file_path}: {e}")
+                    logger.info(f"❌ שגיאה בעיבוד קובץ {file_path}: {e}")
                     continue
 
             if not successful_files:
-                print(f"❌ לא הצלחתי לקרוא אף קובץ מ-{full_blob_path}")
+                logger.info(f"❌ לא הצלחתי לקרוא אף קובץ מ-{full_blob_path}")
                 return None
 
-            print(f"\n📊 סה\"כ עובד עם {len(successful_files)} קבצים")
-            print(f"📊 אורך התוכן הכולל: {len(all_content)} תווים")
+            logger.info(f"\n📊 סה\"כ עובד עם {len(successful_files)} קבצים")
+            logger.info(f"📊 אורך התוכן הכולל: {len(all_content)} תווים")
 
             # יצירת הסיכום
-            print(f"\n🤖 יוצר סיכום קורס שלם...")
+            logger.info(f"\n🤖 יוצר סיכום קורס שלם...")
 
             # הכנת prompt מיוחד לסיכום קורס
             system_prompt = self._get_course_summary_prompt()
@@ -799,13 +800,13 @@ class ContentSummarizer:
 
             course_summary = response.choices[0].message.content
 
-            print(f"✅ סיכום קורס נוצר בהצלחה!")
-            print(f"📊 אורך הסיכום: {len(course_summary)} תווים")
+            logger.info(f"✅ סיכום קורס נוצר בהצלחה!")
+            logger.info(f"📊 אורך הסיכום: {len(course_summary)} תווים")
 
             # שמירת הסיכום לבלוב במבנה החדש: CourseID/course_summary.md
             summary_blob_path = f"{course_id}/course_summary.md"
 
-            print(f"📤 שומר סיכום קורס ל-blob: {summary_blob_path}")
+            logger.info(f"📤 שומר סיכום קורס ל-blob: {summary_blob_path}")
 
             success = blob_manager.upload_text_to_blob(
                 text_content=course_summary,
@@ -813,14 +814,14 @@ class ContentSummarizer:
             )
 
             if success:
-                print(f"✅ סיכום קורס נשמר ב-blob: {summary_blob_path}")
+                logger.info(f"✅ סיכום קורס נשמר ב-blob: {summary_blob_path}")
                 return summary_blob_path
             else:
-                print(f"❌ נכשלה שמירת סיכום קורס לבלוב")
+                logger.info(f"❌ נכשלה שמירת סיכום קורס לבלוב")
                 return None
 
         except Exception as e:
-            print(f"❌ שגיאה בסיכום קורס: {str(e)}")
+            logger.info(f"❌ שגיאה בסיכום קורס: {str(e)}")
             return None
 
     def save_summary_to_file(self, summary: str, original_file_path: str, output_dir: str = "summaries") -> str:
@@ -848,23 +849,23 @@ class ContentSummarizer:
             with open(summary_path, 'w', encoding='utf-8') as f:
                 f.write(summary)
 
-            print(f"✅ Summary saved to: {summary_path}")
+            logger.info(f"✅ Summary saved to: {summary_path}")
             return summary_path
 
         except Exception as e:
             error_msg = f"שגיאה בשמירת הסיכום: {str(e)}"
-            print(f"❌ {error_msg}")
+            logger.info(f"❌ {error_msg}")
             return ""
 
 
 def main():
     """פונקציה ראשית לבדיקה"""
-    print("📝 Content Summarizer - Testing")
-    print("=" * 50)
+    logger.info("📝 Content Summarizer - Testing")
+    logger.info("=" * 50)
 
     summarizer = ContentSummarizer()
 
-    # print("\n🔄 Testing summarize_md_file with blob paths...")
+    # logger.info("\n🔄 Testing summarize_md_file with blob paths...")
     #
     # test_blob_paths = [
     #     "CS101/Section1/Videos_md/2.md",
@@ -875,97 +876,97 @@ def main():
     # failed_tests = 0
     #
     # for blob_path in test_blob_paths:
-    #     print(f"\n{'=' * 50}")
-    #     print(f"🔄 Testing blob: {blob_path}")
-    #     print(f"{'=' * 50}")
+    #     logger.info(f"\n{'=' * 50}")
+    #     logger.info(f"🔄 Testing blob: {blob_path}")
+    #     logger.info(f"{'=' * 50}")
     #
     #     try:
     #         # בדיקה אם הקובץ קיים בבלוב
-    #         print(f"📋 Checking if blob exists...")
+    #         logger.info(f"📋 Checking if blob exists...")
     #
     #         # יצירת סיכום מהבלוב
     #         summary = summarizer.summarize_md_file(blob_path)
     #
     #         if summary and not summary.startswith("שגיאה") and not summary.startswith(
     #                 "לא ניתן") and not summary.startswith("נכשל"):
-    #             print(f"✅ Summary created successfully!")
-    #             print(f"📊 Summary length: {len(summary)} characters")
-    #             print(f"📋 Summary preview (first 300 chars):")
-    #             print("-" * 40)
-    #             print(summary[:300] + "..." if len(summary) > 300 else summary)
-    #             print("-" * 40)
+    #             logger.info(f"✅ Summary created successfully!")
+    #             logger.info(f"📊 Summary length: {len(summary)} characters")
+    #             logger.info(f"📋 Summary preview (first 300 chars):")
+    #             logger.info("-" * 40)
+    #             logger.info(summary[:300] + "..." if len(summary) > 300 else summary)
+    #             logger.info("-" * 40)
     #
     #             # שמירת הסיכום לקובץ מקומי
     #             summary_file = summarizer.save_summary_to_file(summary, blob_path, "summaries")
     #             if summary_file:
-    #                 print(f"💾 Summary saved to: {summary_file}")
+    #                 logger.info(f"💾 Summary saved to: {summary_file}")
     #
     #             successful_tests += 1
     #
     #         else:
-    #             print(f"❌ Failed to create summary: {summary}")
+    #             logger.info(f"❌ Failed to create summary: {summary}")
     #             failed_tests += 1
     #
     #     except Exception as e:
-    #         print(f"❌ Error processing blob {blob_path}: {str(e)}")
+    #         logger.info(f"❌ Error processing blob {blob_path}: {str(e)}")
     #         failed_tests += 1
     #
-    #     print(f"\n⏱️ Waiting 2 seconds before next test...")
+    #     logger.info(f"\n⏱️ Waiting 2 seconds before next test...")
     #     import time
     #     time.sleep(2)
 
 
     # # בדיקת הפונקציה summarize_section_from_blob
-    # print("\n🔄 Testing summarize_section_from_blob...")
+    # logger.info("\n🔄 Testing summarize_section_from_blob...")
     #
     # # נתיב מלא בבלוב
     # full_blob_path = "CS101/Section1/file_summaries"
     #
     #
-    # print(f"📂 Testing full blob path: {full_blob_path}")
+    # logger.info(f"📂 Testing full blob path: {full_blob_path}")
     #
     # try:
     #     # יצירת סיכום section
     #     result = summarizer.summarize_section_from_blob(full_blob_path)
     #
     #     if result:
-    #         print(f"\n✅ Section summary created successfully!")
-    #         print(f"📤 Summary saved to blob: {result}")
-    #         print(f"🎉 Test completed successfully!")
+    #         logger.info(f"\n✅ Section summary created successfully!")
+    #         logger.info(f"📤 Summary saved to blob: {result}")
+    #         logger.info(f"🎉 Test completed successfully!")
     #     else:
-    #         print(f"\n❌ Failed to create section summary")
-    #         print(f"💡 Check if there are summary files in {full_blob_path}")
+    #         logger.info(f"\n❌ Failed to create section summary")
+    #         logger.info(f"💡 Check if there are summary files in {full_blob_path}")
     #
     # except Exception as e:
-    #     print(f"\n❌ Error during section summarization: {str(e)}")
-    #     traceback.print_exc()
+    #     logger.info(f"\n❌ Error during section summarization: {str(e)}")
+    #     traceback.logger.info_exc()
 
 
     # בדיקת הפונקציה summarize_course_from_blob
-    print("\n🔄 Testing summarize_course_from_blob...")
+    logger.info("\n🔄 Testing summarize_course_from_blob...")
 
     # נתיב מלא לתיקיית סיכומי ה-sections
     full_blob_path = "CS101/section_summaries"
 
-    print(f"📂 Testing course summary from path: {full_blob_path}")
+    logger.info(f"📂 Testing course summary from path: {full_blob_path}")
 
     try:
         # יצירת סיכום קורס שלם
         result = summarizer.summarize_course_from_blob(full_blob_path)
 
         if result:
-            print(f"\n✅ Course summary created successfully!")
-            print(f"📤 Summary saved to blob: {result}")
-            print(f"🎉 Test completed successfully!")
+            logger.info(f"\n✅ Course summary created successfully!")
+            logger.info(f"📤 Summary saved to blob: {result}")
+            logger.info(f"🎉 Test completed successfully!")
         else:
-            print(f"\n❌ Failed to create course summary")
-            print(f"💡 Check if there are section summary files in {full_blob_path}")
+            logger.info(f"\n❌ Failed to create course summary")
+            logger.info(f"💡 Check if there are section summary files in {full_blob_path}")
 
     except Exception as e:
-        print(f"\n❌ Error during course summarization: {str(e)}")
-        traceback.print_exc()
+        logger.info(f"\n❌ Error during course summarization: {str(e)}")
+        traceback.logger.info_exc()
 
-    print(f"\n🎉 Testing completed!")
+    logger.info(f"\n🎉 Testing completed!")
 
 if __name__ == "__main__":
     main()

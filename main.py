@@ -15,72 +15,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-import os
 import uvicorn
-from datetime import datetime
-
-import logging
-from logging.handlers import RotatingFileHandler
-
-# Create logs directory if it doesn't exist
-if not os.path.exists('logs'):
-    os.makedirs('logs')
-
-
-# Configure comprehensive logging
-def setup_logging():
-    """Setup comprehensive logging with file rotation and multiple levels"""
-
-    # Create logger
-    logger = logging.getLogger('academic_api')
-    logger.setLevel(logging.DEBUG)
-
-    # Prevent duplicate logs if logger already exists
-    if logger.handlers:
-        return logger
-
-    # Create formatters
-    detailed_formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-
-    simple_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-
-    # File handler with rotation (max 10MB, keep 5 files)
-    file_handler = RotatingFileHandler(
-        'logs/academic_api.log',
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5,
-        encoding='utf-8'
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(detailed_formatter)
-
-    # Error file handler (only errors and critical)
-    error_handler = RotatingFileHandler(
-        'logs/errors.log',
-        maxBytes=5 * 1024 * 1024,  # 5MB
-        backupCount=3,
-        encoding='utf-8'
-    )
-    error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(detailed_formatter)
-
-    # Console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(simple_formatter)
-
-    # Add handlers to logger
-    logger.addHandler(file_handler)
-    logger.addHandler(error_handler)
-    logger.addHandler(console_handler)
-
-    return logger
+from Config.logging_config import setup_logging
 
 
 # Initialize logger
@@ -750,7 +686,7 @@ async def detect_subject_type(request: DetectSubjectRequest):
     - subject_type: Detected subject type ("מתמטי", "הומני", or "לא זוהה")
     """
     try:
-        print(f"🎯 מתחיל זיהוי סוג מקצוע עבור קורס: {request.course_path}")
+        logger.info(f"🎯 מתחיל זיהוי סוג מקצוע עבור קורס: {request.course_path}")
 
         # Call the subject detection function
         subject_type = detect_subject_from_course(
@@ -775,7 +711,7 @@ async def detect_subject_type(request: DetectSubjectRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ שגיאה בזיהוי סוג מקצוע: {e}")
+        logger.info(f"❌ שגיאה בזיהוי סוג מקצוע: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Error detecting subject type: {str(e)}"
@@ -788,10 +724,10 @@ async def detect_subject_type(request: DetectSubjectRequest):
 
 if __name__ == "__main__":
 
-    print("🚀 Starting FastAPI server...")
-    print("📖 API documentation available at: http://localhost:8080/docs")
-    print("🏠 Home page: http://localhost:8080/")
-    print("⏹️ Stop server: Ctrl+C")
+    logger.info("🚀 Starting FastAPI server...")
+    logger.info("📖 API documentation available at: http://localhost:8080/docs")
+    logger.info("🏠 Home page: http://localhost:8080/")
+    logger.info("⏹️ Stop server: Ctrl+C")
 
     uvicorn.run(
         "main:app",

@@ -2,7 +2,8 @@ import requests
 from azure.identity import DefaultAzureCredential
 
 from VideoIndexerClient.Consts import Consts
-
+from Config.logging_config import setup_logging
+logger = setup_logging()
 
 def get_arm_access_token(consts:Consts) -> str:
     '''
