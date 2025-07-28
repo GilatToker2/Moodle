@@ -4,10 +4,19 @@ import os
 import subprocess
 from datetime import datetime
 from typing import Optional, Dict, List
-from Config.config import VIDEO_INDEXER_ACCOUNT_ID, VIDEO_INDEXER_LOCATION, VIDEO_INDEXER_TOKEN
+from datetime import datetime, timedelta
+import jwt
+from Config.config import (
+    VIDEO_INDEXER_ACCOUNT_ID,
+    VIDEO_INDEXER_LOCATION,
+    VIDEO_INDEXER_SUB_ID,
+    VIDEO_INDEXER_RG,
+    VIDEO_INDEXER_VI_ACC,
+)
+from dotenv import load_dotenv
+from VideoIndexerClient.VideoIndexerClient import VideoIndexerClient
+from VideoIndexerClient.Consts import Consts
 from Source.Services.blob_manager import BlobManager
-
-
 
 class VideoIndexerManager:
     """
@@ -16,14 +25,110 @@ class VideoIndexerManager:
     """
 
     def __init__(self):
-        self.token = VIDEO_INDEXER_TOKEN
         self.account_id = VIDEO_INDEXER_ACCOUNT_ID
         self.location = VIDEO_INDEXER_LOCATION
+        self.subscription_id = VIDEO_INDEXER_SUB_ID
+        self.resource_group = VIDEO_INDEXER_RG
+        self.account_name = VIDEO_INDEXER_VI_ACC
         self.supported_formats = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv']
+
+        self._access_token = None
+        self._token_expiry = None
+
+        # יצירת VideoIndexer client לרענון מפתחות
+        self._vi_client = None
+        self._consts = None
+        self._initialize_vi_client()
+
+    def _initialize_vi_client(self):
+        """אתחול VideoIndexer client לרענון מפתחות"""
+        try:
+            load_dotenv()
+
+            self._consts = Consts(
+                ApiVersion='2024-01-01',
+                ApiEndpoint='https://api.videoindexer.ai',
+                AzureResourceManager='https://management.azure.com',
+                AccountName=self.account_name,
+                ResourceGroup=self.resource_group,
+                SubscriptionId=self.subscription_id
+            )
+
+            self._vi_client = VideoIndexerClient()
+            print("✅ VideoIndexer client אותחל בהצלחה")
+
+        except Exception as e:
+            print(f"⚠️ שגיאה באתחול VideoIndexer client: {e}")
+            self._vi_client = None
+
+    def get_valid_token(self):
+        """קבלת מפתח תקף - מרענן אוטומטית אם נדרש"""
+        if self._should_refresh_token():
+            self._refresh_token()
+
+        return self._access_token
+
+    def _should_refresh_token(self):
+        """בדיקה אם צריך לרענן את המפתח"""
+        if not self._access_token:
+            return True
+
+        if not self._token_expiry:
+            return True
+
+        # רענן 5 דקות לפני פקיעה
+        refresh_time = self._token_expiry - timedelta(minutes=5)
+        return datetime.utcnow() >= refresh_time
+
+    def _refresh_token(self):
+        """רענון מפתח Video Indexer"""
+        if not self._vi_client or not self._consts:
+            print("⚠️ VideoIndexer client לא זמין, משתמש במפתח קבוע")
+            return
+
+        try:
+            print("🔄 מרענן מפתח Video Indexer...")
+
+            # קבלת מפתחות חדשים
+            arm_token, vi_token, response = self._vi_client.authenticate_async(self._consts)
+
+            if vi_token:
+                self._access_token = vi_token
+
+                # חילוץ זמן פקיעה מהמפתח
+                self._extract_token_expiry(vi_token)
+
+                print(f"✅ מפתח רוענן בהצלחה. אורך: {len(vi_token)}")
+                if self._token_expiry:
+                    current_time = datetime.utcnow()
+                    print(f"🕐 זמן נוכחי: {current_time}")
+                    print(f"⏰ פוקע ב: {self._token_expiry}")
+            else:
+                print("❌ לא התקבל מפתח חדש")
+
+        except Exception as e:
+            print(f"❌ שגיאה ברענון מפתח: {e}")
+
+    def _extract_token_expiry(self, token):
+        """חילוץ זמן פקיעה מ-JWT token"""
+        try:
+            # פענח בלי אימות כדי לקבל זמן פקיעה
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            exp_timestamp = decoded.get('exp')
+            if exp_timestamp:
+                self._token_expiry = datetime.utcfromtimestamp(exp_timestamp)
+                print(f"📅 זמן פקיעת מפתח: {self._token_expiry}")
+            else:
+                self._token_expiry = None
+
+        except Exception as e:
+            print(f"⚠️ לא ניתן לחלץ זמן פקיעה: {e}")
+            self._token_expiry = None
 
     def _get_params_with_token(self, additional_params=None):
         """קבלת פרמטרים עם טוקן גישה."""
-        params = {"accessToken": self.token}
+        token = self.get_valid_token()
+        params = {"accessToken": token}
         if additional_params:
             params.update(additional_params)
         return params
