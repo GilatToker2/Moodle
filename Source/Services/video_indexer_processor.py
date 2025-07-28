@@ -5,7 +5,6 @@ import subprocess
 from datetime import datetime
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
-import jwt
 from Config.config import (
     VIDEO_INDEXER_ACCOUNT_ID,
     VIDEO_INDEXER_LOCATION,
@@ -109,21 +108,17 @@ class VideoIndexerManager:
         except Exception as e:
             print(f"❌ שגיאה ברענון מפתח: {e}")
 
+
     def _extract_token_expiry(self, token):
-        """חילוץ זמן פקיעה מ-JWT token"""
+        """חילוץ זמן פקיעה מ-JWT token - פשוט נגדיר שהטוקן תקף לשעה"""
         try:
-            # פענח בלי אימות כדי לקבל זמן פקיעה
-            decoded = jwt.decode(token, options={"verify_signature": False})
-            exp_timestamp = decoded.get('exp')
-            if exp_timestamp:
-                self._token_expiry = datetime.utcfromtimestamp(exp_timestamp)
-                print(f"📅 זמן פקיעת מפתח: {self._token_expiry}")
-            else:
-                self._token_expiry = None
+            # במקום לפענח את הטוקן, פשוט נגדיר שהוא תקף לשעה מעכשיו
+            self._token_expiry = datetime.utcnow() + timedelta(hours=1)
+            print(f"📅 זמן פקיעת מפתח (משוער): {self._token_expiry}")
 
         except Exception as e:
-            print(f"⚠️ לא ניתן לחלץ זמן פקיעה: {e}")
-            self._token_expiry = None
+            print(f"⚠️ שגיאה בהגדרת זמן פקיעה: {e}")
+
 
     def _get_params_with_token(self, additional_params=None):
         """קבלת פרמטרים עם טוקן גישה."""

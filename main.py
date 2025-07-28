@@ -203,6 +203,7 @@ async def process_document_file(request: ProcessDocumentRequest):
             "blob_path": None
         }
 
+
 # ================================
 # 🎥 VIDEO PROCESSING ENDPOINTS
 # ================================
@@ -210,7 +211,10 @@ async def process_document_file(request: ProcessDocumentRequest):
 @app.post(
     "/process/video",
     response_model=ProcessVideoResponse,
-    responses={500: {"model": ErrorResponse, "description": "Video processing failed"}},
+    responses={
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "Video processing failed"}
+    },
     tags=["Video Processing"]
 )
 async def process_video_file(request: ProcessVideoRequest):
@@ -247,6 +251,20 @@ async def process_video_file(request: ProcessVideoRequest):
     - blob_path: Path to the created markdown file in blob storage (or None if failed)
     """
     try:
+        print(f"🎥 מתחיל עיבוד וידאו: {request.video_name}")
+        print(f"📍 CourseID: {request.course_id}, SectionID: {request.section_id}, FileID: {request.file_id}")
+        print(f"🔗 VideoURL: {request.video_url}")
+
+        # Validate input parameters
+        if not request.course_id or not request.section_id:
+            raise HTTPException(status_code=422, detail="course_id and section_id are required")
+
+        if not request.video_name or not request.video_url:
+            raise HTTPException(status_code=422, detail="video_name and video_url are required")
+
+        if request.file_id is None or request.file_id < 0:
+            raise HTTPException(status_code=422, detail="file_id must be a non-negative integer")
+
         # Process video from blob storage with new parameters
         result_blob_path = video_processor.process_video_to_md(
             request.course_id,
@@ -258,21 +276,24 @@ async def process_video_file(request: ProcessVideoRequest):
         )
 
         if result_blob_path:
-            return {
-                "success": True,
-                "blob_path": result_blob_path
-            }
+            print(f"✅ עיבוד הושלם בהצלחה: {result_blob_path}")
+            return ProcessVideoResponse(
+                success=True,
+                blob_path=result_blob_path
+            )
         else:
-            return {
-                "success": False,
-                "blob_path": None
-            }
+            print("❌ עיבוד הוידאו נכשל")
+            return ProcessVideoResponse(
+                success=False,
+                blob_path=None
+            )
 
+    except HTTPException:
+        # Re-raise HTTP exceptions (like validation errors)
+        raise
     except Exception as e:
-        return {
-            "success": False,
-            "blob_path": None
-        }
+        print(f"❌ שגיאה בעיבוד הוידאו: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
 
 
 # ================================
