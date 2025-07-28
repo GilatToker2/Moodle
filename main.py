@@ -17,6 +17,80 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
 import uvicorn
+from datetime import datetime
+
+import logging
+from logging.handlers import RotatingFileHandler
+
+# Create logs directory if it doesn't exist
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+
+
+# Configure comprehensive logging
+def setup_logging():
+    """Setup comprehensive logging with file rotation and multiple levels"""
+
+    # Create logger
+    logger = logging.getLogger('academic_api')
+    logger.setLevel(logging.DEBUG)
+
+    # Prevent duplicate logs if logger already exists
+    if logger.handlers:
+        return logger
+
+    # Create formatters
+    detailed_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    simple_formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    # File handler with rotation (max 10MB, keep 5 files)
+    file_handler = RotatingFileHandler(
+        'logs/academic_api.log',
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=5,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(detailed_formatter)
+
+    # Error file handler (only errors and critical)
+    error_handler = RotatingFileHandler(
+        'logs/errors.log',
+        maxBytes=5 * 1024 * 1024,  # 5MB
+        backupCount=3,
+        encoding='utf-8'
+    )
+    error_handler.setLevel(logging.ERROR)
+    error_handler.setFormatter(detailed_formatter)
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(simple_formatter)
+
+    # Add handlers to logger
+    logger.addHandler(file_handler)
+    logger.addHandler(error_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+
+# Initialize logger
+logger = setup_logging()
+
+# Convenience function for backward compatibility
+def debug_log(message):
+    """Write debug message using proper logging"""
+    logger.debug(message)
+
 
 # Import modules
 from Source.Services.files_DocAI_processor import document_to_markdown
@@ -251,9 +325,9 @@ async def process_video_file(request: ProcessVideoRequest):
     - blob_path: Path to the created markdown file in blob storage (or None if failed)
     """
     try:
-        print(f"🎥 מתחיל עיבוד וידאו: {request.video_name}")
-        print(f"📍 CourseID: {request.course_id}, SectionID: {request.section_id}, FileID: {request.file_id}")
-        print(f"🔗 VideoURL: {request.video_url}")
+        logger.info(f"🎥 מתחיל עיבוד וידאו: {request.video_name}")
+        logger.info(f"📍 CourseID: {request.course_id}, SectionID: {request.section_id}, FileID: {request.file_id}")
+        logger.debug(f"🔗 VideoURL: {request.video_url}")
 
         # Validate input parameters
         if not request.course_id or not request.section_id:
@@ -276,13 +350,13 @@ async def process_video_file(request: ProcessVideoRequest):
         )
 
         if result_blob_path:
-            print(f"✅ עיבוד הושלם בהצלחה: {result_blob_path}")
+            logger.info(f"✅ עיבוד הושלם בהצלחה: {result_blob_path}")
             return ProcessVideoResponse(
                 success=True,
                 blob_path=result_blob_path
             )
         else:
-            print("❌ עיבוד הוידאו נכשל")
+            logger.error("❌ עיבוד הוידאו נכשל")
             return ProcessVideoResponse(
                 success=False,
                 blob_path=None
@@ -292,7 +366,7 @@ async def process_video_file(request: ProcessVideoRequest):
         # Re-raise HTTP exceptions (like validation errors)
         raise
     except Exception as e:
-        print(f"❌ שגיאה בעיבוד הוידאו: {str(e)}")
+        logger.error(f"❌ שגיאה בעיבוד הוידאו: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
 
 

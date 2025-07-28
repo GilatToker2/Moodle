@@ -67,6 +67,7 @@ class VideoIndexerManager:
 
         return self._access_token
 
+
     def _should_refresh_token(self):
         """בדיקה אם צריך לרענן את המפתח"""
         if not self._access_token:
