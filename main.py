@@ -25,6 +25,11 @@ from Source.Services.video_indexer_processor import VideoIndexerManager
 from Source.Services.unified_indexer import index_content_files, UnifiedContentIndexer
 from Source.Services.subject_detector import detect_subject_from_course
 
+# Import Video Indexer Client for token testing
+from VideoIndexerClient.Consts import Consts
+from VideoIndexerClient.VideoIndexerClient import VideoIndexerClient
+from dotenv import load_dotenv
+
 # Initialize FastAPI app
 app = FastAPI(title="Academic Content API", version="1.0.0")
 
@@ -110,6 +115,14 @@ class DetectSubjectRequest(BaseModel):
 class DetectSubjectResponse(BaseModel):
     success: bool
     subject_type: str
+
+class VideoIndexerTokenResponse(BaseModel):
+    success: bool
+    account_id: Optional[str] = None
+    location: Optional[str] = None
+    arm_token_length: Optional[int] = None
+    vi_token_length: Optional[int] = None
+    error: Optional[str] = None
 
 
 # ================================
@@ -614,6 +627,91 @@ async def summarize_course_from_blob(request: SummarizeCourseRequest):
             "blob_path": None
         }
 
+
+# ================================
+# 🔑 VIDEO INDEXER TOKEN TESTING
+# ================================
+
+@app.get(
+    "/test/video_indexer_tokens",
+    response_model=VideoIndexerTokenResponse,
+    responses={500: {"model": ErrorResponse, "description": "Token test failed"}},
+    tags=["Testing"]
+)
+async def test_video_indexer_tokens():
+    """
+    🔑 Test Video Indexer Token Generation
+
+    **Function Description:**
+    Tests the Video Indexer authentication process and token generation.
+
+    **What it does:**
+    • Loads configuration from environment variables
+    • Attempts to get ARM access token using Azure credentials
+    • Attempts to get Video Indexer access token
+    • Gets account information
+    • Returns token status and account details
+
+    **Returns:**
+    - success: Boolean indicating if authentication was successful
+    - account_id: Video Indexer account ID (if successful)
+    - location: Account location (if successful)
+    - arm_token_length: Length of ARM token (for verification)
+    - vi_token_length: Length of VI token (for verification)
+    - error: Error message (if failed)
+    """
+    try:
+        print("🔑 Testing Video Indexer token generation...")
+
+        # Load configuration
+        load_dotenv()
+        consts = Consts(
+            ApiVersion='2024-01-01',
+            ApiEndpoint='https://api.videoindexer.ai',
+            AzureResourceManager='https://management.azure.com',
+            AccountName=os.getenv('VIDEO_INDEXER_VI_ACC'),
+            ResourceGroup=os.getenv('VIDEO_INDEXER_RG'),
+            SubscriptionId=os.getenv('VIDEO_INDEXER_SUB_ID')
+        )
+
+        print(f"📋 Configuration loaded:")
+        print(f"   Account Name: {consts.AccountName}")
+        print(f"   Resource Group: {consts.ResourceGroup}")
+        print(f"   Subscription ID: {consts.SubscriptionId}")
+
+        # Initialize Video Indexer Client
+        client = VideoIndexerClient()
+
+        # Test authentication
+        arm_access_token, vi_access_token, full_response = client.authenticate_async(consts)
+
+        print(f"✅ ARM Token length: {len(arm_access_token) if arm_access_token else 0}")
+        print(f"✅ VI Token length: {len(vi_access_token) if vi_access_token else 0}")
+
+        # Get account details
+        account_info = client.get_account_async()
+
+        return VideoIndexerTokenResponse(
+            success=True,
+            account_id=client.account["properties"]["accountId"] if client.account else None,
+            location=client.account["location"] if client.account else None,
+            arm_token_length=len(arm_access_token) if arm_access_token else 0,
+            vi_token_length=len(vi_access_token) if vi_access_token else 0,
+            error=None
+        )
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Error testing Video Indexer tokens: {error_msg}")
+
+        return VideoIndexerTokenResponse(
+            success=False,
+            account_id=None,
+            location=None,
+            arm_token_length=0,
+            vi_token_length=0,
+            error=error_msg
+        )
 
 # ================================
 # 🔍 SUBJECT DETECTION ENDPOINTS
