@@ -99,6 +99,7 @@ class UnifiedContentIndexer:
                 SimpleField(name="id", type=SearchFieldDataType.String, key=True),
                 SimpleField(name="content_type", type=SearchFieldDataType.String, filterable=True, facetable=True),
                 SimpleField(name="source_id", type=SearchFieldDataType.String, filterable=True, facetable=True),
+                SimpleField(name="course_id", type=SearchFieldDataType.String, filterable=True, facetable=True),
                 SimpleField(name="created_date", type=SearchFieldDataType.DateTimeOffset, filterable=True,
                             sortable=True),
 
@@ -940,6 +941,9 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                 # יצירת אמבדינגים
                 embeddings = indexer.embed_texts_batch(texts)
 
+                # Extract course_id from blob path (e.g., "CS101/Section1/Videos_md/2.md" -> "CS101")
+                course_id = blob_path.split('/')[0] if '/' in blob_path else "unknown"
+
                 # בניית מסמכי אינדקס עבור כל חתיכה
                 keywords_str = ", ".join(video_data.get("keywords", []))
                 topics_str = ", ".join(video_data.get("topics", []))
@@ -951,6 +955,7 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                         "id": str(uuid.uuid4()),
                         "content_type": "video",
                         "source_id": video_data.get("id", "unknown"),
+                        "course_id": course_id,
                         "text": chunk.get("text", ""),
                         "vector": embedding,
                         "chunk_index": chunk.get("chunk_index", 0),
@@ -1007,6 +1012,9 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                 # יצירת אמבדינגים
                 embeddings = indexer.embed_texts_batch(texts)
 
+                # Extract course_id from blob path (e.g., "CS101/Section1/Docs_md/1.md" -> "CS101")
+                course_id = blob_path.split('/')[0] if '/' in blob_path else "unknown"
+
                 # בניית מסמכי אינדקס עבור כל חתיכה
                 for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
                     if not embedding:
@@ -1015,6 +1023,7 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                         "id": str(uuid.uuid4()),
                         "content_type": "document",
                         "source_id": doc_data.get("id", "unknown"),
+                        "course_id": course_id,
                         "text": chunk.get("text", ""),
                         "vector": embedding,
                         "chunk_index": chunk.get("chunk_index", 0),
