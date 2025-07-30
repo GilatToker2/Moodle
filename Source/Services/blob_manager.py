@@ -1,7 +1,7 @@
 """
 Blob Storage Manager
-מנהל העלאה והורדה של קבצים ל-Azure Blob Storage
-תומך בכל סוגי הקבצים: MP4, MD, PDF, JSON וכו'
+Manages upload and download of files to Azure Blob Storage
+Supports all file types: MP4, MD, PDF, JSON etc.
 """
 
 import os
@@ -14,15 +14,15 @@ from Config.logging_config import setup_logging
 logger = setup_logging()
 
 class BlobManager:
-    """מנהל העלאה והורדה של קבצים ל-Azure Blob Storage"""
+    """Manages upload and download of files to Azure Blob Storage"""
 
     def __init__(self, container_name: str = None):
         self.blob_service = BlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING)
-        # אם לא הועבר container_name, השתמש בדיפולטיבי מהקונפיג
+        # If no container_name is passed, use default from config
         self.container_name = container_name if container_name is not None else CONTAINER_NAME
 
-        # מיפוי סוגי קבצים ל-content types
-        # מיפוי סוגי קבצים ל-content types
+        # File type to content type mapping
+        # File type to content type mapping
         self.content_types = {
             '.mp4': 'video/mp4',
             '.avi': 'video/x-msvideo',
@@ -49,47 +49,47 @@ class BlobManager:
         }
 
     def _get_content_type(self, file_path: str) -> str:
-        """קביעת content type על פי סיומת הקובץ"""
+        """Determine content type based on file extension"""
         _, ext = os.path.splitext(file_path.lower())
         return self.content_types.get(ext, 'application/octet-stream')
 
     def download_file(self, blob_name: str, local_file_path: str) -> bool:
         """
-        הורדת קובץ מ-blob storage
+        Download file from blob storage
 
         Args:
-            blob_name: שם הקובץ ב-blob storage (כולל תיקייה אם יש)
-            local_file_path: נתיב השמירה המקומי
+            blob_name: File name in blob storage (including folder if exists)
+            local_file_path: Local save path
 
         Returns:
-            True אם ההורדה הצליחה, False אחרת
+            True if download succeeded, False otherwise
         """
         try:
             container_client = self.blob_service.get_container_client(self.container_name)
             blob_client = container_client.get_blob_client(blob_name)
 
-            logger.info(f"📥 מוריד קובץ: {blob_name} -> {local_file_path}")
+            logger.info(f"📥 Downloading file: {blob_name} -> {local_file_path}")
 
             with open(local_file_path, 'wb') as file_data:
                 download_stream = blob_client.download_blob()
                 file_data.write(download_stream.readall())
 
-            logger.info(f"✅ הקובץ הורד בהצלחה: {local_file_path}")
+            logger.info(f"✅ File downloaded successfully: {local_file_path}")
             return True
 
         except Exception as e:
-            logger.info(f"❌ שגיאה בהורדת הקובץ {blob_name}: {e}")
+            logger.info(f"❌ Error downloading file {blob_name}: {e}")
             return False
 
     def list_files(self, folder: Optional[str] = None) -> List[str]:
         """
-        רשימת קבצים ב-blob storage
+        List files in blob storage
 
         Args:
-            folder: תיקייה ספציפית (אופציונלי - אם לא מוגדר יציג את כל הקבצים)
+            folder: Specific folder (optional - if not specified will show all files)
 
         Returns:
-            רשימת שמות הקבצים
+            List of file names
         """
         try:
             container_client = self.blob_service.get_container_client(self.container_name)
@@ -106,7 +106,7 @@ class BlobManager:
             return blob_list
 
         except Exception as e:
-            logger.info(f"❌ שגיאה ברשימת קבצים: {e}")
+            logger.info(f"❌ Error listing files: {e}")
             return []
 
     # def download_folder_files(self, blob_folder_path: str, local_temp_dir: str) -> List[str]:
@@ -160,17 +160,17 @@ class BlobManager:
 
     def generate_sas_url(self, blob_name: str, hours: int = 4) -> str:
         """
-        יצירת SAS URL לקריאה של קובץ ב-blob storage
+        Generate SAS URL for reading a file in blob storage
 
         Args:
-            blob_name: שם הקובץ ב-blob storage (כולל תיקייה אם יש)
-            hours: מספר שעות שה-SAS יהיה תקף (ברירת מחדל: 4 שעות)
+            blob_name: File name in blob storage (including folder if exists)
+            hours: Number of hours the SAS will be valid (default: 4 hours)
 
         Returns:
-            SAS URL לקובץ
+            SAS URL for the file
         """
         try:
-            # יצירת SAS token
+            # Generate SAS token
             sas_token = generate_blob_sas(
                 account_name=self.blob_service.account_name,
                 container_name=self.container_name,
@@ -180,66 +180,66 @@ class BlobManager:
                 expiry=datetime.utcnow() + timedelta(hours=hours)
             )
 
-            # יצירת URL מלא
+            # Create full URL
             blob_url = f"{self.blob_service.primary_endpoint}{self.container_name}/{blob_name}?{sas_token}"
 
-            logger.info(f"🔗 נוצר SAS URL לקובץ: {blob_name} (תקף ל-{hours} שעות)")
+            logger.info(f"🔗 Generated SAS URL for file: {blob_name} (valid for {hours} hours)")
             return blob_url
 
         except Exception as e:
-            logger.info(f"❌ שגיאה ביצירת SAS URL עבור {blob_name}: {e}")
+            logger.info(f"❌ Error generating SAS URL for {blob_name}: {e}")
             return ""
 
     def download_to_memory(self, blob_name: str) -> Optional[bytes]:
         """
-        הורדת קובץ מ-blob storage ישירות לזיכרון
+        Download file from blob storage directly to memory
 
         Args:
-            blob_name: שם הקובץ ב-blob storage (כולל תיקייה אם יש)
+            blob_name: File name in blob storage (including folder if exists)
 
         Returns:
-            bytes של הקובץ או None אם נכשל
+            File bytes or None if failed
         """
         try:
             container_client = self.blob_service.get_container_client(self.container_name)
             blob_client = container_client.get_blob_client(blob_name)
 
-            logger.info(f"📥 מוריד קובץ לזיכרון: {blob_name}")
+            logger.info(f"📥 Downloading file to memory: {blob_name}")
 
             download_stream = blob_client.download_blob()
             file_bytes = download_stream.readall()
 
-            logger.info(f"✅ הקובץ הורד בהצלחה לזיכרון: {blob_name} ({len(file_bytes)} bytes)")
+            logger.info(f"✅ File downloaded successfully to memory: {blob_name} ({len(file_bytes)} bytes)")
             return file_bytes
 
         except Exception as e:
-            logger.info(f"❌ שגיאה בהורדת הקובץ לזיכרון {blob_name}: {e}")
+            logger.info(f"❌ Error downloading file to memory {blob_name}: {e}")
             return None
 
     def upload_text_to_blob(self, text_content: str, blob_name: str, container: str = None) -> bool:
         """
-        העלאת תוכן טקסט ישירות ל-blob storage ללא יצירת קובץ זמני
+        Upload text content directly to blob storage without creating temporary file
 
         Args:
-            text_content: התוכן הטקסטואלי להעלאה
-            blob_name: שם הקובץ ב-blob (כולל נתיב וירטואלי)
-            container: שם הקונטיינר (אם לא מוגדר, ישתמש בברירת המחדל)
+            text_content: Text content to upload
+            blob_name: File name in blob (including virtual path)
+            container: Container name (if not specified, will use default)
 
         Returns:
-            True אם ההעלאה הצליחה, False אחרת
+            True if upload succeeded, False otherwise
         """
         try:
-            # שימוש בקונטיינר שהועבר או בברירת המחדל
+            # Use passed container or default
             target_container = container if container else self.container_name
 
-            # קביעת content type על פי סיומת הקובץ
+            # Determine content type based on file extension
             content_type = self._get_content_type(blob_name)
 
             container_client = self.blob_service.get_container_client(target_container)
 
-            logger.info(f"📤 מעלה טקסט ל-blob: {target_container}/{blob_name}")
+            logger.info(f"📤 Uploading text to blob: {target_container}/{blob_name}")
 
-            # העלאה ישירה של הטקסט
+            # Direct text upload
             container_client.upload_blob(
                 name=blob_name,
                 data=text_content.encode('utf-8'),
@@ -247,11 +247,11 @@ class BlobManager:
                 content_settings=ContentSettings(content_type=content_type)
             )
 
-            logger.info(f"✅ הטקסט הועלה בהצלחה: {target_container}/{blob_name}")
+            logger.info(f"✅ Text uploaded successfully: {target_container}/{blob_name}")
             return True
 
         except Exception as e:
-            logger.info(f"❌ שגיאה בהעלאת הטקסט ל-blob: {e}")
+            logger.info(f"❌ Error uploading text to blob: {e}")
             return False
 
 if __name__ == "__main__":
@@ -263,22 +263,22 @@ if __name__ == "__main__":
         blob_manager = BlobManager()
 
         # Check Section1 folder specifically
-        logger.info("\n📁 קבצים בתיקיית 'Section1':")
+        logger.info("\n📁 Files in 'Section1' folder:")
         section1_blobs = blob_manager.list_files("Section1")
-        logger.info(f"נמצאו {len(section1_blobs)} קבצים ב-Section1:")
+        logger.info(f"Found {len(section1_blobs)} files in Section1:")
         for blob in section1_blobs:
             logger.info(f"  - {blob}")
 
-        logger.info("\n📁 כל הקבצים בקונטיינר:")
+        logger.info("\n📁 All files in container:")
         all_blobs = blob_manager.list_files()
-        logger.info(f"סה\"כ נמצאו {len(all_blobs)} קבצים:")
+        logger.info(f"Total found {len(all_blobs)} files:")
         for blob in all_blobs[:10]:  # Show first 10
             logger.info(f"  - {blob}")
         if len(all_blobs) > 10:
-            logger.info(f"  ... ועוד {len(all_blobs) - 10} קבצים")
+            logger.info(f"  ... and {len(all_blobs) - 10} more files")
 
         # Test uploading a file to Section1
-        logger.info("\n📤 בדיקת העלאת קובץ לתיקיית Section1:")
+        logger.info("\n📤 Testing file upload to Section1 folder:")
 
         # Create a test file
         test_file_path = "test_upload.txt"
@@ -289,10 +289,10 @@ if __name__ == "__main__":
         success = blob_manager.upload_file(test_file_path, "test_file.txt", "Section1")
 
         if success:
-            logger.info("✅ הקובץ הועלה בהצלחה!")
+            logger.info("✅ File uploaded successfully!")
 
             # List files again to see the new file
-            logger.info("\n📁 קבצים ב-Section1 אחרי ההעלאה:")
+            logger.info("\n📁 Files in Section1 after upload:")
             updated_blobs = blob_manager.list_files("Section1")
             for blob in updated_blobs:
                 logger.info(f"  - {blob}")

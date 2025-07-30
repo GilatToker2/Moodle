@@ -21,8 +21,8 @@ from Config.logging_config import setup_logging
 logger = setup_logging()
 class VideoIndexerManager:
     """
-    מנהל עיבוד וידאו באמצעות Azure Video Indexer
-    מתמחה בעיבוד וידאו מ-blob storage ויצירת קבצי markdown
+    Video processing manager using Azure Video Indexer
+    Specializes in processing videos from blob storage and creating markdown files
     """
 
     def __init__(self):
@@ -36,13 +36,13 @@ class VideoIndexerManager:
         self._access_token = None
         self._token_expiry = None
 
-        # יצירת VideoIndexer client לרענון מפתחות
+        # Create VideoIndexer client for token refresh
         self._vi_client = None
         self._consts = None
         self._initialize_vi_client()
 
     def _initialize_vi_client(self):
-        """אתחול VideoIndexer client לרענון מפתחות"""
+        """Initialize VideoIndexer client for token refresh"""
         try:
             load_dotenv()
 
@@ -56,14 +56,14 @@ class VideoIndexerManager:
             )
 
             self._vi_client = VideoIndexerClient()
-            logger.info("✅ VideoIndexer client אותחל בהצלחה")
+            logger.info("✅ VideoIndexer client initialized successfully")
 
         except Exception as e:
-            logger.info(f"⚠️ שגיאה באתחול VideoIndexer client: {e}")
+            logger.info(f"⚠️ Error initializing VideoIndexer client: {e}")
             self._vi_client = None
 
     def get_valid_token(self):
-        """קבלת מפתח תקף - מרענן אוטומטית אם נדרש"""
+        """Get valid token - automatically refreshes if needed"""
         if self._should_refresh_token():
             self._refresh_token()
 
@@ -71,59 +71,59 @@ class VideoIndexerManager:
 
 
     def _should_refresh_token(self):
-        """בדיקה אם צריך לרענן את המפתח"""
+        """Check if token needs to be refreshed"""
         if not self._access_token:
             return True
 
         if not self._token_expiry:
             return True
 
-        # רענן 5 דקות לפני פקיעה
+        # Refresh 5 minutes before expiry
         refresh_time = self._token_expiry - timedelta(minutes=5)
         return datetime.utcnow() >= refresh_time
 
     def _refresh_token(self):
-        """רענון מפתח Video Indexer"""
+        """Refresh Video Indexer token"""
         if not self._vi_client or not self._consts:
-            logger.info("⚠️ VideoIndexer client לא זמין, משתמש במפתח קבוע")
+            logger.info("⚠️ VideoIndexer client not available, using fixed token")
             return
 
         try:
-            logger.info("🔄 מרענן מפתח Video Indexer...")
+            logger.info("🔄 Refreshing Video Indexer token...")
 
-            # קבלת מפתחות חדשים
+            # Get new tokens
             arm_token, vi_token, response = self._vi_client.authenticate_async(self._consts)
 
             if vi_token:
                 self._access_token = vi_token
 
-                # חילוץ זמן פקיעה מהמפתח
+                # Extract token expiry time
                 self._extract_token_expiry(vi_token)
 
-                logger.info(f"✅ מפתח רוענן בהצלחה. אורך: {len(vi_token)}")
+                logger.info(f"✅ Token refreshed successfully. Length: {len(vi_token)}")
                 if self._token_expiry:
                     current_time = datetime.utcnow()
-                    logger.info(f"🕐 זמן נוכחי: {current_time}")
-                    logger.info(f"⏰ פוקע ב: {self._token_expiry}")
+                    logger.info(f"🕐 Current time: {current_time}")
+                    logger.info(f"⏰ Expires at: {self._token_expiry}")
             else:
-                logger.info("❌ לא התקבל מפתח חדש")
+                logger.info("❌ No new token received")
 
         except Exception as e:
-            logger.info(f"❌ שגיאה ברענון מפתח: {e}")
+            logger.info(f"❌ Error refreshing token: {e}")
 
 
     def _extract_token_expiry(self, token):
         try:
-            # במקום לפענח את הטוקן, פשוט נגדיר שהוא תקף לשעה מעכשיו
+            # Instead of decoding the token, simply set it as valid for one hour from now
             self._token_expiry = datetime.utcnow() + timedelta(hours=1)
-            logger.info(f"📅 זמן פקיעת מפתח (משוער): {self._token_expiry}")
+            logger.info(f"📅 Token expiry time (estimated): {self._token_expiry}")
 
         except Exception as e:
-            logger.info(f"⚠️ שגיאה בהגדרת זמן פקיעה: {e}")
+            logger.info(f"⚠️ Error setting expiry time: {e}")
 
 
     def _get_params_with_token(self, additional_params=None):
-        """קבלת פרמטרים עם טוקן גישה."""
+        """Get parameters with access token."""
         token = self.get_valid_token()
         params = {"accessToken": token}
         if additional_params:
@@ -132,13 +132,13 @@ class VideoIndexerManager:
 
     def upload_video_from_url(self, video_sas_url: str, video_name: str) -> str:
         """
-        העלאת וידאו ל-Video Indexer באמצעות SAS URL
+        Upload video to Video Indexer using SAS URL
 
         Args:
-            video_sas_url: SAS URL של הוידאו ב-blob storage
-            video_name: שם הוידאו ב-Video Indexer
+            video_sas_url: SAS URL of the video in blob storage
+            video_name: Video name in Video Indexer
         """
-        logger.info(f"📤 מעלה וידאו: {video_name}")
+        logger.info(f"📤 Uploading video: {video_name}")
 
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos"
 
@@ -152,7 +152,7 @@ class VideoIndexerManager:
         })
 
         try:
-            logger.info(f"  ⏳ שולח בקשה ל-Video Indexer...")
+            logger.info(f"  ⏳ Sending request to Video Indexer...")
             resp = requests.post(url, params=params, timeout=30)
             resp.raise_for_status()
 
@@ -160,17 +160,17 @@ class VideoIndexerManager:
             video_id = data.get("id") or data.get("videoId")
 
             if not video_id:
-                raise RuntimeError(f"העלאה נכשלה: {data}")
+                raise RuntimeError(f"Upload failed: {data}")
 
-            logger.info(f"  ✅ הועלה בהצלחה, מזהה וידאו: {video_id}")
+            logger.info(f"  ✅ Uploaded successfully, video ID: {video_id}")
             return video_id
 
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"שגיאה בהעלאת הוידאו: {str(e)}")
+            raise RuntimeError(f"Error uploading video: {str(e)}")
 
     def wait_for_indexing(self, video_id: str, interval: int = 10, max_wait_minutes: int = 180) -> Dict:
-        """המתנה לסיום עיבוד הוידאו ב-Video Indexer"""
-        logger.info(f"⏳ ממתין לסיום עיבוד הוידאו {video_id}...")
+        """Wait for video processing completion in Video Indexer"""
+        logger.info(f"⏳ Waiting for video processing completion {video_id}...")
 
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Index"
         start_time = time.time()
@@ -184,25 +184,25 @@ class VideoIndexerManager:
                 data = resp.json()
 
                 state = data.get("state")
-                logger.info(f"  📊 מצב עיבוד: {state}")
+                logger.info(f"  📊 Processing state: {state}")
 
                 if state == "Processed":
-                    logger.info("  ✅ עיבוד הושלם!")
+                    logger.info("  ✅ Processing completed!")
                     return data
                 elif state == "Failed":
-                    raise RuntimeError("עיבוד הוידאו נכשל")
+                    raise RuntimeError("Video processing failed")
 
                 elapsed_time = time.time() - start_time
                 if elapsed_time > max_wait_seconds:
-                    raise TimeoutError(f"עיבוד הוידאו לקח יותר מ-{max_wait_minutes} דקות")
+                    raise TimeoutError(f"Video processing took more than {max_wait_minutes} minutes")
 
                 time.sleep(interval)
 
             except requests.exceptions.RequestException as e:
-                raise RuntimeError(f"שגיאה בבדיקת מצב העיבוד: {str(e)}")
+                raise RuntimeError(f"Error checking processing status: {str(e)}")
 
     def extract_transcript_with_timestamps(self, index_json: Dict) -> List[Dict]:
-        """חילוץ טרנסקריפט עם חותמות זמן"""
+        """Extract transcript with timestamps"""
         transcript_items = (
             index_json
             .get("videos", [{}])[0]
@@ -238,7 +238,7 @@ class VideoIndexerManager:
         return transcript_segments
 
     def merge_segments_by_duration(self, segments: List[Dict], max_duration_seconds: int = 30) -> List[Dict]:
-        """איחוד סגמנטים לסגמנטים ארוכים יותר"""
+        """Merge segments into longer segments"""
         if not segments:
             return []
 
@@ -280,11 +280,11 @@ class VideoIndexerManager:
         if current_segment is not None:
             merged_segments.append(current_segment)
 
-        logger.info(f"  🔗 איחוד סגמנטים: {len(segments)} → {len(merged_segments)} (מקס {max_duration_seconds} שניות)")
+        logger.info(f"  🔗 Merging segments: {len(segments)} → {len(merged_segments)} (max {max_duration_seconds} seconds)")
         return merged_segments
 
     def create_textual_summary(self, video_id: str, deployment_name: str = "gpt-4o") -> str:
-        """יצירת סיכום טקסטואלי באמצעות GPT"""
+        """Create textual summary using GPT"""
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Summaries/Textual"
         params = self._get_params_with_token({
             "deploymentName": deployment_name,
@@ -312,7 +312,7 @@ class VideoIndexerManager:
                 raise
 
     def get_textual_summary(self, video_id: str, summary_id: str) -> str:
-        """קבלת הסיכום הטקסטואלי לאחר שהוא מוכן"""
+        """Get textual summary after it's ready"""
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Summaries/Textual/{summary_id}"
 
         while True:
@@ -323,16 +323,16 @@ class VideoIndexerManager:
             state = data.get("state")
             if state == "Processed":
                 summary = data.get("summary", "")
-                logger.info(f"  ✅ הסיכום מוכן. אורך: {len(summary)} תווים")
+                logger.info(f"  ✅ Summary ready. Length: {len(summary)} characters")
                 return summary
             elif state == "Failed":
-                raise RuntimeError(f"יצירת הסיכום נכשלה: {data}")
+                raise RuntimeError(f"Summary creation failed: {data}")
             else:
-                logger.info(f"  ⏳ מצב הסיכום: {state} — ממתין...")
+                logger.info(f"  ⏳ Summary state: {state} — waiting...")
                 time.sleep(10)
 
     def delete_video(self, video_id: str) -> bool:
-        """מחיקת וידאו מ-Video Indexer כדי לנקות קונטיינרים מיותרים"""
+        """Delete video from Video Indexer to clean up unnecessary containers"""
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}"
 
         try:
@@ -340,19 +340,19 @@ class VideoIndexerManager:
             resp = requests.delete(url, params=params, timeout=30)
             resp.raise_for_status()
 
-            logger.info(f"  🗑️ הוידאו נמחק מ-Video Indexer: {video_id}")
+            logger.info(f"  🗑️ Video deleted from Video Indexer: {video_id}")
             return True
 
         except requests.exceptions.RequestException as e:
-            logger.info(f"  ⚠️ שגיאה במחיקת הוידאו מ-Video Indexer: {str(e)}")
+            logger.info(f"  ⚠️ Error deleting video from Video Indexer: {str(e)}")
             return False
 
     def extract_video_metadata(self, index_json: Dict) -> Dict:
-        """חילוץ מטא-דאטה מהוידאו"""
+        """Extract metadata from video"""
         vid_info = index_json.get('videos', [{}])[0]
         insights = vid_info.get('insights', {})
 
-        # משך זמן
+        # Duration
         duration_sec = vid_info.get('durationInSeconds', 0)
         if not duration_sec:
             duration_obj = insights.get('duration')
@@ -363,7 +363,7 @@ class VideoIndexerManager:
             else:
                 duration_sec = insights.get('durationInSeconds', 0)
 
-        # מילות מפתח ונושאים
+        # Keywords and topics
         keywords = [kw.get('text') for kw in insights.get('keywords', []) if kw.get('text')]
         topics = [tp.get('name') for tp in insights.get('topics', []) if tp.get('name')]
 
@@ -372,36 +372,36 @@ class VideoIndexerManager:
         if 'ocr' in insights:
             ocr_texts = [o.get('text') for o in insights.get('ocr', []) if o.get('text')]
 
-        # דוברים
+        # Speakers
         speakers = []
         if 'speakers' in insights:
             speakers = [s.get('name') for s in insights.get('speakers', []) if s.get('name')]
         if not speakers and 'speakers' in insights:
-            speakers = [f"דובר #{s.get('id', i + 1)}" for i, s in enumerate(insights.get('speakers', []))]
+            speakers = [f"Speaker #{s.get('id', i + 1)}" for i, s in enumerate(insights.get('speakers', []))]
 
         metadata = {
             'video_id': index_json.get('id', ''),
             'name': vid_info.get('name', ''),
             'description': index_json.get('description', ''),
-            'duration': self._seconds_to_hhmmss(int(duration_sec)) if duration_sec else 'לא זמין',
+            'duration': self._seconds_to_hhmmss(int(duration_sec)) if duration_sec else 'Not available',
             'language': insights.get('sourceLanguage', 'he-IL'),
             'keywords': keywords,
             'topics': topics,
             'ocr': ocr_texts,
-            'speakers': speakers if speakers else ['מרצה'],
+            'speakers': speakers if speakers else ['Lecturer'],
             'created_date': datetime.now().isoformat()
         }
 
-        logger.info(f"  📊 חולץ מטא-דאטה:")
-        logger.info(f"    - משך זמן: {metadata['duration']}")
-        logger.info(f"    - מילות מפתח: {len(keywords)} נמצאו")
-        logger.info(f"    - נושאים: {len(topics)} נמצאו")
-        logger.info(f"    - טקסטי OCR: {len(ocr_texts)} נמצאו")
+        logger.info(f"  📊 Extracted metadata:")
+        logger.info(f"    - Duration: {metadata['duration']}")
+        logger.info(f"    - Keywords: {len(keywords)} found")
+        logger.info(f"    - Topics: {len(topics)} found")
+        logger.info(f"    - OCR texts: {len(ocr_texts)} found")
 
         return metadata
 
     def _time_to_seconds(self, time_str: str) -> int:
-        """המרת זמן לשניות"""
+        """Convert time to seconds"""
         try:
             if ':' in time_str:
                 parts = time_str.split(':')
@@ -416,14 +416,14 @@ class VideoIndexerManager:
             return 0
 
     def _seconds_to_hhmmss(self, seconds: int) -> str:
-        """המרת שניות לפורמט HH:MM:SS"""
+        """Convert seconds to HH:MM:SS format"""
         hours = seconds // 3600
         minutes = (seconds % 3600) // 60
         secs = seconds % 60
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
     def parse_insights_to_md(self, structured_data: Dict) -> str:
-        """המרת נתוני הוידאו לפורמט Markdown"""
+        """Convert video data to Markdown format"""
         md_content = []
 
         # כותרת ראשית
@@ -512,71 +512,71 @@ class VideoIndexerManager:
 
     def process_video_to_md(self, course_id: str, section_id: str, file_id: int, video_name: str, video_url: str, merge_segments_duration: Optional[int] = 30) -> str | None:
         """
-        עיבוד וידאו מ-blob storage ליצירת קובץ markdown
+        Process video from blob storage to create markdown file
 
         Args:
-            course_id: מזהה הקורס
-            section_id: מזהה הסקציה
-            file_id: מזהה הקובץ
-            video_name: שם הוידאו (ייכנס לתמלול)
-            video_url: נתיב הוידאו ב-blob storage
-            merge_segments_duration: משך זמן מקסימלי בשניות לאיחוד סגמנטים
+            course_id: Course identifier
+            section_id: Section identifier
+            file_id: File identifier
+            video_name: Video name (will be included in transcription)
+            video_url: Video path in blob storage
+            merge_segments_duration: Maximum duration in seconds for merging segments
 
         Returns:
-            נתיב הקובץ ב-blob storage או None אם נכשל
+            File path in blob storage or None if failed
         """
-        # יצירת מנהלי blob - אחד לקריאה מ-raw-data ואחד לכתיבה ל-processeddata
+        # Create blob managers - one for reading from raw-data and one for writing to processeddata
         blob_manager_read = BlobManager(container_name="raw-data")
         blob_manager_write = BlobManager(container_name="processeddata")
 
-        # בדיקת סיומת הקובץ
+        # Check file extension
         file_ext = os.path.splitext(video_url)[1].lower()
         if file_ext not in self.supported_formats:
-            logger.info(f"❌ פורמט וידאו לא נתמך: {video_url}")
+            logger.info(f"❌ Unsupported video format: {video_url}")
             return None
 
-        # יצירת SAS URL לוידאו מקונטיינר raw-data
-        logger.info(f"🔗 יוצר SAS URL לוידאו מקונטיינר raw-data: {video_url}")
+        # Create SAS URL for video from raw-data container
+        logger.info(f"🔗 Creating SAS URL for video from raw-data container: {video_url}")
         video_sas_url = blob_manager_read.generate_sas_url(video_url, hours=4)
 
         if not video_sas_url:
-            logger.info(f"❌ נכשלה יצירת SAS URL לוידאו: {video_url}")
+            logger.info(f"❌ Failed to create SAS URL for video: {video_url}")
             return None
 
-        logger.info(f"🔄 מעבד וידאו: {video_name}")
+        logger.info(f"🔄 Processing video: {video_name}")
 
         try:
-            logger.info(f"\n🎬 מתחיל עיבוד וידאו ל-MD: {video_name}")
+            logger.info(f"\n🎬 Starting video processing to MD: {video_name}")
 
-            # העלאה ועיבוד ל-Video Indexer עם שם הוידאו
+            # Upload and process to Video Indexer with video name
             video_id = self.upload_video_from_url(video_sas_url, video_name)
             index_data = self.wait_for_indexing(video_id)
 
-            # יצירת סיכום GPT
-            logger.info("  📝 יוצר סיכום GPT...")
+            # Create GPT summary
+            logger.info("  📝 Creating GPT summary...")
             summary_text = ""
             try:
                 summary_id = self.create_textual_summary(video_id)
                 summary_text = self.get_textual_summary(video_id, summary_id)
-                logger.info(f"  ✅ התקבל סיכום באורך: {len(summary_text)} תווים")
+                logger.info(f"  ✅ Received summary with length: {len(summary_text)} characters")
             except Exception as e:
-                logger.info(f"  ⚠️ יצירת סיכום GPT נכשלה, ממשיך בלי סיכום: {e}")
+                logger.info(f"  ⚠️ GPT summary creation failed, continuing without summary: {e}")
 
-            # חילוץ טרנסקריפט
+            # Extract transcript
             transcript_segments = self.extract_transcript_with_timestamps(index_data)
 
-            # איחוד סגמנטים אם נדרש
+            # Merge segments if required
             if merge_segments_duration:
-                logger.info(f"  🔗 מאחד סגמנטים למקסימום {merge_segments_duration} שניות...")
+                logger.info(f"  🔗 Merging segments to maximum {merge_segments_duration} seconds...")
                 transcript_segments = self.merge_segments_by_duration(transcript_segments, merge_segments_duration)
 
-            # חילוץ מטא-דאטה
+            # Extract metadata
             metadata = self.extract_video_metadata(index_data)
 
-            # יצירת מבנה נתונים מובנה עם שם הוידאו
+            # Create structured data with video name
             structured_data = {
-                "id": str(file_id),  # שימוש ב-file_id כמזהה במקום video_id
-                "name": video_name,  # שימוש בשם שהועבר
+                "id": str(file_id),  # Use file_id as identifier instead of video_id
+                "name": video_name,  # Use provided name
                 **metadata,
                 "transcript_segments": transcript_segments,
                 "full_transcript": " ".join([seg["text"] for seg in transcript_segments]),
@@ -585,42 +585,42 @@ class VideoIndexerManager:
                 "summary_text": summary_text
             }
 
-            # המרה ל-markdown
+            # Convert to markdown
             md_content = self.parse_insights_to_md(structured_data)
 
-            logger.info(f"  ✅ עיבוד הושלם בהצלחה!")
-            logger.info(f"  📊 נמצאו {len(transcript_segments)} קטעי טרנסקריפט")
+            logger.info(f"  ✅ Processing completed successfully!")
+            logger.info(f"  📊 Found {len(transcript_segments)} transcript segments")
 
         except Exception as e:
-            logger.info(f"❌ נכשל עיבוד הוידאו: {str(e)}")
+            logger.info(f"❌ Video processing failed: {str(e)}")
             return None
 
-        # יצירת נתיב היעד לפי המבנה: CourseID/SectionID/Videos_md/FileID.md
+        # Create target path according to structure: CourseID/SectionID/Videos_md/FileID.md
         target_blob_path = f"{course_id}/{section_id}/Videos_md/{file_id}.md"
 
-        logger.info(f"📤 מעלה לקונטיינר processeddata: {target_blob_path}")
+        logger.info(f"📤 Uploading to processeddata container: {target_blob_path}")
 
-        # שמירה לקונטיינר processeddata
+        # Save to processeddata container
         success = blob_manager_write.upload_text_to_blob(
             text_content=md_content,
             blob_name=target_blob_path
         )
 
         if success:
-            logger.info(f"✅ הקובץ הועלה בהצלחה לקונטיינר processeddata: {target_blob_path}")
+            logger.info(f"✅ File uploaded successfully to processeddata container: {target_blob_path}")
 
-            # ניקוי: מחיקת הוידאו מ-Video Indexer כדי לנקות קונטיינרים מיותרים
-            logger.info("🧹 מנקה קונטיינרים מיותרים...")
+            # Cleanup: delete video from Video Indexer to clean up unnecessary containers
+            logger.info("🧹 Cleaning up unnecessary containers...")
             self.delete_video(video_id)
 
             return target_blob_path
         else:
-            logger.info(f"❌ נכשלה העלאת הקובץ לקונטיינר processeddata")
+            logger.info(f"❌ Failed to upload file to processeddata container")
             return None
 
 
 if __name__ == "__main__":
-    # עיבוד וידאו מ-blob storage עם פרמטרים חדשים
+    # Process video from blob storage with new parameters
     course_id = "Information_systems"
     section_id = "Section1"
     file_id = 11122
@@ -628,7 +628,7 @@ if __name__ == "__main__":
     video_url = "L_A_Information_system.mp4"
 
 
-    logger.info(f"🧪 מעבד וידאו: {video_name}")
+    logger.info(f"🧪 Processing video: {video_name}")
     logger.info(f"📍 CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
     logger.info(f"🔗 VideoURL: {video_url}")
 
@@ -637,10 +637,10 @@ if __name__ == "__main__":
         result = manager.process_video_to_md(course_id, section_id, file_id, video_name, video_url, merge_segments_duration=20)
 
         if result:
-            logger.info(f"\n🎉 הוידאו עובד בהצלחה: {result}")
-            logger.info(f"📁 הקובץ נשמר במבנה: {course_id}/{section_id}/Videos_md/{file_id}.md")
+            logger.info(f"\n🎉 Video processed successfully: {result}")
+            logger.info(f"📁 File saved in structure: {course_id}/{section_id}/Videos_md/{file_id}.md")
         else:
-            logger.info(f"\n❌ נכשל עיבוד הוידאו: {video_name}")
+            logger.info(f"\n❌ Video processing failed: {video_name}")
 
     except Exception as e:
-        logger.info(f"❌ שגיאה בעיבוד הוידאו: {e}")
+        logger.info(f"❌ Error processing video: {e}")

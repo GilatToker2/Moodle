@@ -80,51 +80,51 @@ def document_to_markdown(course_id: str, section_id: str, file_id: int, document
     No temp files or disk I/O.
 
     Args:
-        course_id: מזהה הקורס
-        section_id: מזהה הסקציה
-        file_id: מזהה הקובץ
-        document_name: שם המסמך (ייכנס לתמלול)
-        document_url: נתיב הקובץ ב-blob storage (למשל: "Section1/Raw-data/Docs/Ex5Sol.pdf")
+        course_id: Course identifier
+        section_id: Section identifier
+        file_id: File identifier
+        document_name: Document name (will be included in transcription)
+        document_url: File path in blob storage (e.g., "Section1/Raw-data/Docs/Ex5Sol.pdf")
 
     Returns:
-        נתיב הקובץ ב-blob storage או None אם נכשל
+        File path in blob storage or None if failed
     """
-    # יצירת מנהלי blob - אחד לקריאה מ-raw-data ואחד לכתיבה ל-processeddata
+    # Create blob managers - one for reading from raw-data and one for writing to processeddata
     blob_manager_read = BlobManager(container_name="raw-data")
     blob_manager_write = BlobManager(container_name="processeddata")
 
-    # בדיקת סיומת הקובץ
+    # Check file extension
     supported_extensions = {'.pdf', '.doc', '.docx', '.pptx', '.png', '.jpg', '.jpeg', '.tiff', '.bmp'}
     file_ext = os.path.splitext(document_url)[1].lower()
 
     if file_ext not in supported_extensions:
-        logger.info(f"❌ סוג קובץ לא נתמך: {document_url}")
+        logger.info(f"❌ Unsupported file type: {document_url}")
         return None
 
-    logger.info(f"🌐 מוריד קובץ מקונטיינר raw-data: {document_url}")
+    logger.info(f"🌐 Downloading file from raw-data container: {document_url}")
 
     # Step 1: Download blob directly to memory from raw-data container
     file_bytes = blob_manager_read.download_to_memory(document_url)
     if not file_bytes:
-        logger.info(f"❌ נכשלה הורדת הקובץ לזיכרון מקונטיינר raw-data: {document_url}")
+        logger.info(f"❌ Failed to download file to memory from raw-data container: {document_url}")
         return None
 
-    logger.info(f"🔄 מעבד קובץ בזיכרון: {document_name}")
+    logger.info(f"🔄 Processing file in memory: {document_name}")
 
     # Step 2: Process document directly from memory
     md_content = process_document_from_memory(file_bytes)
     if not md_content:
-        logger.info(f"❌ נכשל עיבוד הקובץ: {document_name}")
+        logger.info(f"❌ Failed to process file: {document_name}")
         return None
 
-    # הוספת שם המסמך לתחילת התמלול
+    # Add document name to the beginning of the transcription
     enhanced_md_content = f"# {document_name}\n\n{md_content}"
 
     # Step 3: Upload markdown directly to processeddata container
-    # יצירת נתיב לפי המבנה: CourseID/SectionID/Docs_md/FileID.md
+    # Create path according to structure: CourseID/SectionID/Docs_md/FileID.md
     target_blob_path = f"{course_id}/{section_id}/Docs_md/{file_id}.md"
 
-    logger.info(f"📤 מעלה markdown לקונטיינר processeddata: {target_blob_path}")
+    logger.info(f"📤 Uploading markdown to processeddata container: {target_blob_path}")
 
     success = blob_manager_write.upload_text_to_blob(
         text_content=enhanced_md_content,
@@ -132,10 +132,10 @@ def document_to_markdown(course_id: str, section_id: str, file_id: int, document
     )
 
     if success:
-        logger.info(f"✅ הקובץ הועלה בהצלחה לקונטיינר processeddata: {target_blob_path}")
+        logger.info(f"✅ File uploaded successfully to processeddata container: {target_blob_path}")
         return target_blob_path
     else:
-        logger.info(f"❌ נכשלה העלאת הקובץ לקונטיינר processeddata")
+        logger.info(f"❌ Failed to upload file to processeddata container")
         return None
 
 
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     # document_url = "Section1/Raw-data/Docs/bdida_tirgul_02.pdf"
     document_url = "bdida_tirgul_02.pdf"
 
-    logger.info(f"🧪 מעבד קובץ: {document_name}")
+    logger.info(f"🧪 Processing file: {document_name}")
     logger.info(f"📍 CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
     logger.info(f"🔗 DocumentURL: {document_url}")
 
@@ -157,6 +157,6 @@ if __name__ == "__main__":
     result = document_to_markdown(course_id, section_id, file_id, document_name, document_url)
 
     if result:
-        logger.info(f"\n🎉 הקובץ עובד בהצלחה: {result}")
+        logger.info(f"\n🎉 File processed successfully: {result}")
     else:
-        logger.info(f"\n❌ נכשל עיבוד הקובץ: {document_name}")
+        logger.info(f"\n❌ Failed to process file: {document_name}")

@@ -1,6 +1,6 @@
 """
-Unified Content Indexer - מאחד וידאו ומסמכים באינדקס אחד
-מקבל תוכן מסוגים שונים ומאחסן אותם באינדקס משותף עם שדות גמישים
+Unified Content Indexer - Unifies videos and documents in one index
+Receives content from different types and stores them in a shared index with flexible fields
 
 Core workflow:
 1. Take content from videos OR documents
@@ -37,8 +37,8 @@ from Config.logging_config import setup_logging
 logger = setup_logging()
 class UnifiedContentIndexer:
     """
-    אינדקסר מאוחד לתוכן מסוגים שונים - וידאו ומסמכים
-    משתמש בסכמה גמישה שמתאימה לשני הסוגים
+    Unified indexer for different content types - videos and documents
+    Uses flexible schema that fits both types
     """
 
     def __init__(self):
@@ -151,13 +151,13 @@ class UnifiedContentIndexer:
             self.index_client.create_or_update_index(index)
             logger.info("✅ Unified index created successfully")
 
-            # # הדפסת סכמת האינדקס המפורטת
-            # logger.info("\n📋 סכמת האינדקס שנוצרה - כל השדות:")
+            # # Print detailed index schema
+            # logger.info("\n📋 Created index schema - all fields:")
             # logger.info("=" * 80)
             # for field in fields:
             #     field_info = f"  🔹 {field.name} ({field.type})"
             #
-            #     # הוספת מאפיינים נוספים
+            #     # Add additional properties
             #     properties = []
             #     if hasattr(field, 'key') and field.key:
             #         properties.append("KEY")
@@ -180,19 +180,19 @@ class UnifiedContentIndexer:
             #     logger.info(field_info)
             #
             # logger.info("=" * 80)
-            # logger.info("📝 הסבר השדות:")
-            # logger.info("  🆔 id - מזהה ייחודי לכל chunk")
-            # logger.info("  📋 content_type - סוג התוכן (video/document)")
-            # logger.info("  📋 source_id - מזהה המקור (video_id/document_id)")
-            # logger.info("  📝 text - התוכן הטקסטואלי")
-            # logger.info("  📊 vector - וקטור embedding")
-            # logger.info("  📋 chunk_index - מספר החתיכה")
-            # logger.info("  ⏰ start_time - זמן התחלה (וידאו בלבד)")
-            # logger.info("  ⏰ end_time - זמן סיום (וידאו בלבד)")
-            # logger.info("  📑 section_title - כותרת סעיף (מסמכים בלבד)")
-            # logger.info("  📅 created_date - תאריך יצירה")
-            # logger.info("  🔍 keywords - מילות מפתח")
-            # logger.info("  🏷️ topics - נושאים")
+            # logger.info("📝 Field explanations:")
+            # logger.info("  🆔 id - unique identifier for each chunk")
+            # logger.info("  📋 content_type - content type (video/document)")
+            # logger.info("  📋 source_id - source identifier (video_id/document_id)")
+            # logger.info("  📝 text - textual content")
+            # logger.info("  📊 vector - embedding vector")
+            # logger.info("  📋 chunk_index - chunk number")
+            # logger.info("  ⏰ start_time - start time (video only)")
+            # logger.info("  ⏰ end_time - end time (video only)")
+            # logger.info("  📑 section_title - section title (documents only)")
+            # logger.info("  📅 created_date - creation date")
+            # logger.info("  🔍 keywords - keywords")
+            # logger.info("  🏷️ topics - topics")
             # logger.info("=" * 80)
 
             return True
@@ -225,16 +225,16 @@ class UnifiedContentIndexer:
 
     def detect_sentence_endings(self, text: str) -> List[str]:
         """
-        זיהוי סוף משפטים - פונקציה שמזהה סוף משפט
-        כל משפט יהיה chunk בסיסי
+        Sentence ending detection - function that identifies sentence endings
+        Each sentence will be a basic chunk
         """
 
-        # ביטוי רגולרי מתקדם לזיהוי סוף משפטים בעברית ואנגלית
+        # Advanced regex for identifying sentence endings in Hebrew and English
         sentence_patterns = [
-            r'[.!?]+\s+',  # נקודה/קריאה/שאלה + רווח
-            r'[.!?]+$',  # נקודה/קריאה/שאלה בסוף השורה
-            r'\n\s*\n',  # שורה ריקה (מפריד פסקאות)
-            r'[.!?]+\s*\n',  # נקודה + שורה חדשה
+            r'[.!?]+\s+',  # period/exclamation/question + space
+            r'[.!?]+$',  # period/exclamation/question at end of line
+            r'\n\s*\n',  # empty line (paragraph separator)
+            r'[.!?]+\s*\n',  # period + new line
         ]
 
         sentence_regex = re.compile('|'.join(sentence_patterns), re.MULTILINE)
@@ -244,11 +244,11 @@ class UnifiedContentIndexer:
 
         for match in sentence_regex.finditer(text):
             sentence = text[last_end:match.end()].strip()
-            if sentence and len(sentence) > 10:  # סינון משפטים קצרים מדי
+            if sentence and len(sentence) > 10:  # filter sentences that are too short
                 sentences.append(sentence)
             last_end = match.end()
 
-        # הוספת החלק האחרון אם קיים
+        # Add the last part if exists
         if last_end < len(text):
             remaining = text[last_end:].strip()
             if remaining and len(remaining) > 10:
@@ -258,8 +258,8 @@ class UnifiedContentIndexer:
 
     def merge_sentences_by_length(self, sentences: List[str], max_length) -> List[Dict]:
         """
-        איחוד משפטים לחתיכות לפי גודל רצוי
-        כמו ב-Video Indexer שמאחד segments לפי זמן
+        Merge sentences into chunks by desired size
+        Like Video Indexer that merges segments by time
         """
 
         if not sentences:
@@ -274,19 +274,19 @@ class UnifiedContentIndexer:
         }
 
         for i, sentence in enumerate(sentences):
-            # בדיקה אם הוספת המשפט תחרוג מהמקסימום
+            # Check if adding the sentence would exceed maximum
             potential_text = current_chunk["text"] + (" " if current_chunk["text"] else "") + sentence
             potential_length = len(potential_text)
 
             if potential_length <= max_length or current_chunk["sentence_count"] == 0:
-                # הוספת המשפט לחתיכה הנוכחית
+                # Add sentence to current chunk
                 current_chunk["sentences"].append(sentence)
                 current_chunk["text"] = potential_text
                 current_chunk["sentence_count"] += 1
                 current_chunk["character_count"] = potential_length
 
             else:
-                # החתיכה הנוכחית מלאה - נסיים אותה ונתחיל חדשה
+                # Current chunk is full - finish it and start new one
                 if current_chunk["sentences"]:
                     chunk_info = {
                         "text": current_chunk["text"],
@@ -296,7 +296,7 @@ class UnifiedContentIndexer:
                     }
                     chunks.append(chunk_info)
 
-                    # התחלת חתיכה חדשה
+                    # Start new chunk
                 current_chunk = {
                     "sentences": [sentence],
                     "text": sentence,
@@ -304,7 +304,7 @@ class UnifiedContentIndexer:
                     "character_count": len(sentence)
                 }
 
-        # הוספת החתיכה האחרונה
+        # Add the last chunk
         if current_chunk["sentences"]:
             chunk_info = {
                 "text": current_chunk["text"],
@@ -317,20 +317,20 @@ class UnifiedContentIndexer:
 
     def sentence_based_chunking(self, text: str, max_chunk_length) -> List[Dict]:
         """
-        חלוקה מבוססת משפטים - הפונקציה הראשית
-        קודם בודק אם הטקסט בגודל טבעי, ורק אם חורג אז מחלק למשפטים
+        Sentence-based chunking - main function
+        First checks if text is natural size, only if exceeds then splits into sentences
         """
 
-        # בדיקה ראשונה: האם הטקסט בגודל טבעי?
+        # First check: is the text natural size?
         if len(text) <= max_chunk_length:
             return [{
                 "text": text,
-                "sentence_count": 1,  # נחשב כמשפט אחד
+                "sentence_count": 1,  # considered as one sentence
                 "character_count": len(text),
                 "chunk_index": 0
             }]
 
-        # שלב 1: זיהוי משפטים
+        # Step 1: sentence identification
         sentences = self.detect_sentence_endings(text)
 
         if not sentences:
@@ -341,7 +341,7 @@ class UnifiedContentIndexer:
                 "chunk_index": 0
             }]
 
-        # שלב 2: איחוד משפטים לחתיכות
+        # Step 2: merge sentences into chunks
         chunks = self.merge_sentences_by_length(sentences, max_chunk_length)
 
         return chunks
@@ -372,7 +372,7 @@ class UnifiedContentIndexer:
 
     def _process_document_to_chunks(self, markdown_content: str) -> List[Dict]:
         """Convert document markdown to searchable chunks using sentence-based chunking"""
-        logger.info("📄 מעבד מסמך עם חלוקה מבוססת משפטים")
+        logger.info("📄 Processing document with sentence-based chunking")
 
         # Split by headers to preserve sections
         sections = re.split(r'\n#+\s+', markdown_content)
@@ -408,7 +408,7 @@ class UnifiedContentIndexer:
                 all_chunks.append(chunk)
                 global_chunk_idx += 1
 
-        logger.info(f"✅ נוצרו {len(all_chunks)} חתיכות מבוססות משפטים")
+        logger.info(f"✅ Created {len(all_chunks)} sentence-based chunks")
         return all_chunks
 
     def get_stats(self) -> Dict:
@@ -447,27 +447,27 @@ class UnifiedContentIndexer:
 
     def delete_content_by_source(self, source_id: str, content_type: str = None) -> Dict:
         """
-        מחיקת כל התוכן הקשור למקור מסוים (video או document) מהאינדקס
+        Delete all content related to a specific source (video or document) from the index
 
         Args:
-            source_id: מזהה המקור (video_id או document_id)
-            content_type: סוג התוכן ('video' או 'document'). אם None, ימחק מכל הסוגים
+            source_id: Source identifier (video_id or document_id)
+            content_type: Content type ('video' or 'document'). If None, will delete from all types
 
         Returns:
-            Dict עם פרטי המחיקה
+            Dict with deletion details
         """
         try:
             search_client = SearchClient(self.search_endpoint, self.index_name, self.credential)
 
-            # בניית פילטר לחיפוש
+            # Build search filter
             if content_type:
                 filter_query = f"source_id eq '{source_id}' and content_type eq '{content_type}'"
             else:
                 filter_query = f"source_id eq '{source_id}'"
 
-            logger.info(f"🔍 מחפש תוכן למחיקה: {filter_query}")
+            logger.info(f"🔍 Searching for content to delete: {filter_query}")
 
-            # חיפוש כל המסמכים הקשורים למקור
+            # Search all documents related to source
             results = search_client.search(
                 search_text="*",
                 filter=filter_query,
@@ -475,7 +475,7 @@ class UnifiedContentIndexer:
                 include_total_count=True
             )
 
-            # איסוף כל ה-IDs למחיקה
+            # Collect all IDs for deletion
             docs_to_delete = []
             chunks_by_type = {"video": 0, "document": 0}
 
@@ -486,31 +486,31 @@ class UnifiedContentIndexer:
             total_found = results.get_count()
 
             if not docs_to_delete:
-                logger.info(f"⚠️ לא נמצא תוכן למחיקה עבור source_id: {source_id}")
+                logger.info(f"⚠️ No content found for deletion for source_id: {source_id}")
                 return {
                     "success": True,
                     "deleted_count": 0,
                     "source_id": source_id,
-                    "message": "לא נמצא תוכן למחיקה"
+                    "message": "No content found for deletion"
                 }
 
-            logger.info(f"🗑️ נמצאו {total_found} chunks למחיקה:")
+            logger.info(f"🗑️ Found {total_found} chunks for deletion:")
             logger.info(f"  📄 Video chunks: {chunks_by_type['video']}")
             logger.info(f"  📝 Document chunks: {chunks_by_type['document']}")
 
-            # ביצוע המחיקה
+            # Perform deletion
             delete_results = search_client.delete_documents(docs_to_delete)
 
-            # ספירת מחיקות מוצלחות
+            # Count successful deletions
             successful_deletes = sum(1 for r in delete_results if r.succeeded)
             failed_deletes = len(delete_results) - successful_deletes
 
             if failed_deletes > 0:
-                logger.info(f"⚠️ {failed_deletes} מחיקות נכשלו")
+                logger.info(f"⚠️ {failed_deletes} deletions failed")
 
-            logger.info(f"✅ נמחקו בהצלחה {successful_deletes} chunks עבור {source_id}")
+            logger.info(f"✅ Successfully deleted {successful_deletes} chunks for {source_id}")
 
-            # עדכון סטטיסטיקות
+            # Update statistics
             self.get_stats()
 
             return {
@@ -520,17 +520,17 @@ class UnifiedContentIndexer:
                 "source_id": source_id,
                 "content_type": content_type,
                 "chunks_by_type": chunks_by_type,
-                "message": f"נמחקו {successful_deletes} chunks בהצלחה"
+                "message": f"Successfully deleted {successful_deletes} chunks"
             }
 
         except Exception as e:
-            logger.info(f"❌ שגיאה במחיקת תוכן: {e}")
+            logger.info(f"❌ Error deleting content: {e}")
             return {
                 "success": False,
                 "deleted_count": 0,
                 "source_id": source_id,
                 "error": str(e),
-                "message": f"שגיאה במחיקה: {e}"
+                "message": f"Deletion error: {e}"
             }
     #
     # def update_content_file(self, blob_path: str, force_update: bool = False) -> Dict:
@@ -641,24 +641,24 @@ class UnifiedContentIndexer:
 
     def list_content_sources(self, content_type: str = None) -> Dict:
         """
-        הצגת רשימת כל המקורות (sources) באינדקס
+        Display list of all sources in the index
 
         Args:
-            content_type: סוג התוכן לסינון ('video' או 'document'). אם None, יציג הכל
+            content_type: Content type for filtering ('video' or 'document'). If None, will show all
 
         Returns:
-            Dict עם רשימת המקורות ופרטיהם
+            Dict with list of sources and their details
         """
         try:
             search_client = SearchClient(self.search_endpoint, self.index_name, self.credential)
 
-            # בניית פילטר
+            # Build filter
             if content_type:
                 filter_query = f"content_type eq '{content_type}'"
             else:
                 filter_query = None
 
-            # חיפוש עם קיבוץ לפי source_id
+            # Search with grouping by source_id
             results = search_client.search(
                 search_text="*",
                 filter=filter_query,
@@ -666,7 +666,7 @@ class UnifiedContentIndexer:
                 facets=["source_id", "content_type"]
             )
 
-            # איסוף מקורות ייחודיים
+            # Collect unique sources
             sources = {}
             for result in results:
                 source_id = result.get("source_id")
@@ -680,8 +680,8 @@ class UnifiedContentIndexer:
 
             sources_list = list(sources.values())
 
-            logger.info(f"📋 רשימת מקורות באינדקס:")
-            logger.info(f"  📊 סה״כ מקורות: {len(sources_list)}")
+            logger.info(f"📋 List of sources in index:")
+            logger.info(f"  📊 Total sources: {len(sources_list)}")
 
             for source in sources_list:
                 logger.info(f"  🔹 {source['source_id']} ({source['content_type']}) - {source['chunk_count']} chunks")
@@ -694,7 +694,7 @@ class UnifiedContentIndexer:
             }
 
         except Exception as e:
-            logger.info(f"❌ שגיאה בהצגת מקורות: {e}")
+            logger.info(f"❌ Error displaying sources: {e}")
             return {
                 "success": False,
                 "sources": [],
@@ -704,17 +704,17 @@ class UnifiedContentIndexer:
 
 def _detect_content_type_from_path(blob_path: str) -> str:
     """
-    זיהוי סוג התוכן לפי נתיב הקובץ
-    מחזיר 'video' אם הנתיב מכיל 'Videos_md' או 'document' אם מכיל 'Docs_md'
+    Detect content type by file path
+    Returns 'video' if path contains 'Videos_md' or 'document' if contains 'Docs_md'
     """
     if "videos_md" in blob_path.lower():
         return "video"
     elif "docs_md" in blob_path.lower():
         return "document"
     else:
-        # ברירת מחדל - ננסה לזהות לפי סיומת
+        # Default - try to detect by extension
         if blob_path.lower().endswith('.md'):
-            return "document"  # ברירת מחדל למסמכים
+            return "document"  # Default for documents
         return "unknown"
 
 
@@ -889,62 +889,62 @@ def parse_document_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Di
 
 def index_content_files(blob_paths: List[str], create_new_index: bool = False) -> str:
     """
-    אינדוקס קבצי MD מ-blob storage לאינדקס מאוחד.
-    מזהה אוטומטית את סוג הקובץ (וידאו/מסמך) לפי ה-path.
+    Index MD files from blob storage to unified index.
+    Automatically detects file type (video/document) by path.
 
     Args:
-        blob_paths: רשימת נתיבי blob של קבצי MD (למשל: ["Videos_md/video.md", "Docs_md/doc.md"])
-        create_new_index: האם ליצור אינדקס חדש (True) או להוסיף לאינדקס קיים (False)
+        blob_paths: List of blob paths of MD files (e.g., ["Videos_md/video.md", "Docs_md/doc.md"])
+        create_new_index: Whether to create new index (True) or add to existing index (False)
 
     Returns:
-        הודעת סיכום עם מספר הקבצים שהועלו לאינדקס
+        Summary message with number of files uploaded to index
     """
     indexer = UnifiedContentIndexer()
     blob_manager = BlobManager()
 
-    # צור/אתחל את האינדקס - תמיד משתמש ב INDEX_NAME מהקונפיג
+    # Create/initialize index - always uses INDEX_NAME from config
     if not indexer.create_index(create_new=create_new_index):
-        return "❌ נכשל ביצירת האינדקס"
+        return "❌ Failed to create index"
 
     all_docs = []
     processed_videos = 0
     processed_documents = 0
     skipped_files = 0
 
-    logger.info(f"📁 מעבד {len(blob_paths)} קבצי MD מ-blob storage...")
+    logger.info(f"📁 Processing {len(blob_paths)} MD files from blob storage...")
 
     for blob_path in blob_paths:
         try:
-            logger.info(f"🔄 מעבד קובץ: {blob_path}")
+            logger.info(f"🔄 Processing file: {blob_path}")
 
-            # זיהוי סוג הקובץ מתוך ה-path
+            # Detect file type from path
             content_type = _detect_content_type_from_path(blob_path)
-            logger.info(f"  📋 זוהה כסוג: {content_type}")
+            logger.info(f"  📋 Detected as type: {content_type}")
 
             if content_type == "video":
                 logger.info(f'content type: {content_type}')
-                # עיבוד קובץ וידאו
+                # Process video file
                 video_data = parse_video_md_from_blob(blob_path, blob_manager)
                 segments = video_data.get("transcript_segments", [])
                 if not segments:
-                    logger.info(f"⚠️ קובץ {blob_path} לא מכיל תמלול, מדלגים.")
+                    logger.info(f"⚠️ File {blob_path} does not contain transcript, skipping.")
                     skipped_files += 1
                     continue
 
-                # פיצול התמלול לחתיכות
+                # Split transcript into chunks
                 chunks = indexer._process_video_segments_to_chunks(segments)
                 texts = [chunk["text"] for chunk in chunks if chunk.get("text")]
                 if not texts:
                     skipped_files += 1
                     continue
 
-                # יצירת אמבדינגים
+                # Generate embeddings
                 embeddings = indexer.embed_texts_batch(texts)
 
                 # Extract course_id from blob path (e.g., "CS101/Section1/Videos_md/2.md" -> "CS101")
                 course_id = blob_path.split('/')[0] if '/' in blob_path else "unknown"
 
-                # בניית מסמכי אינדקס עבור כל חתיכה
+                # Build index documents for each chunk
                 keywords_str = ", ".join(video_data.get("keywords", []))
                 topics_str = ", ".join(video_data.get("topics", []))
 
@@ -959,19 +959,19 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                         "text": chunk.get("text", ""),
                         "vector": embedding,
                         "chunk_index": chunk.get("chunk_index", 0),
-                        # שדות ייחודיים לוידאו
+                        # Video-specific fields
                         "start_time": chunk.get("start_time", "00:00:00"),
                         "end_time": chunk.get("end_time", "00:00:00"),
-                        # שדות מסמך (null עבור וידאו)
+                        # Document fields (null for video)
                         "section_title": None,
-                        # Meta data משותף
+                        # Shared metadata
                         "created_date": datetime.now(timezone.utc),
                         "keywords": keywords_str,
                         "topics": topics_str,
                     }
 
-                    # הדפסת מפורטת של כל השדות שנכנסים לאינדקס
-                    logger.info(f"\n    🎥 VIDEO CHUNK #{i + 1} - פרטים מלאים:")
+                    # Detailed printout of all fields entering the index
+                    logger.info(f"\n    🎥 VIDEO CHUNK #{i + 1} - Full details:")
                     logger.info(f"    {'='*70}")
                     logger.info(f"    🆔 ID: {doc['id']}")
                     logger.info(f"    📋 Content Type: {doc['content_type']}")
@@ -994,28 +994,28 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                 processed_videos += 1
 
             elif content_type == "document":
-                # עיבוד קובץ מסמך
+                # Process document file
                 doc_data = parse_document_md_from_blob(blob_path, blob_manager)
                 markdown_content = doc_data.get("content", "")
                 if not markdown_content:
-                    logger.info(f"⚠️ קובץ {blob_path} ריק או לא נטען, מדלגים.")
+                    logger.info(f"⚠️ File {blob_path} is empty or not loaded, skipping.")
                     skipped_files += 1
                     continue
 
-                # פיצול תוכן המסמך לחתיכות
+                # Split document content into chunks
                 chunks = indexer._process_document_to_chunks(markdown_content)
                 texts = [chunk["text"] for chunk in chunks if chunk.get("text")]
                 if not texts:
                     skipped_files += 1
                     continue
 
-                # יצירת אמבדינגים
+                # Generate embeddings
                 embeddings = indexer.embed_texts_batch(texts)
 
                 # Extract course_id from blob path (e.g., "CS101/Section1/Docs_md/1.md" -> "CS101")
                 course_id = blob_path.split('/')[0] if '/' in blob_path else "unknown"
 
-                # בניית מסמכי אינדקס עבור כל חתיכה
+                # Build index documents for each chunk
                 for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
                     if not embedding:
                         continue
@@ -1027,19 +1027,19 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                         "text": chunk.get("text", ""),
                         "vector": embedding,
                         "chunk_index": chunk.get("chunk_index", 0),
-                        # שדות וידאו (null עבור מסמכים)
+                        # Video fields (null for documents)
                         "start_time": None,
                         "end_time": None,
-                        # שדות ייחודיים למסמכים
+                        # Document-specific fields
                         "section_title": chunk.get("section_title", ""),
-                        # Meta data משותף
+                        # Shared metadata
                         "created_date": datetime.now(timezone.utc),
                         "keywords": None,
                         "topics": None,
                     }
 
-                    # הדפסת מפורטת של כל השדות שנכנסים לאינדקס
-                    logger.info(f"\n    📝 DOCUMENT CHUNK #{i + 1} - פרטים מלאים:")
+                    # Detailed printout of all fields entering the index
+                    logger.info(f"\n    📝 DOCUMENT CHUNK #{i + 1} - Full details:")
                     logger.info(f"    {'='*70}")
                     logger.info(f"    🆔 ID: {doc['id']}")
                     logger.info(f"    📋 Content Type: {doc['content_type']}")
@@ -1063,38 +1063,38 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                 processed_documents += 1
 
             else:
-                logger.info(f"❌ לא ניתן לזהות סוג קובץ עבור: {blob_path}")
+                logger.info(f"❌ Cannot identify file type for: {blob_path}")
                 skipped_files += 1
                 continue
 
         except Exception as e:
-            logger.info(f"❌ שגיאה בעיבוד הקובץ {blob_path}: {e}")
+            logger.info(f"❌ Error processing file {blob_path}: {e}")
             skipped_files += 1
             continue
 
-    # הצג סיכום עיבוד
-    logger.info(f"\n📊 סיכום עיבוד:")
-    logger.info(f"  🎥 קבצי וידאו שעובדו: {processed_videos}")
-    logger.info(f"  📝 קבצי מסמכים שעובדו: {processed_documents}")
-    logger.info(f"  ⚠️ קבצים שדולגו: {skipped_files}")
-    logger.info(f"  📄 סה״כ chunks שנוצרו: {len(all_docs)}")
+    # Display processing summary
+    logger.info(f"\n📊 Processing summary:")
+    logger.info(f"  🎥 Video files processed: {processed_videos}")
+    logger.info(f"  📝 Document files processed: {processed_documents}")
+    logger.info(f"  ⚠️ Files skipped: {skipped_files}")
+    logger.info(f"  📄 Total chunks created: {len(all_docs)}")
 
-    # העלאה לאינדקס - משתמש ב INDEX_NAME מהקונפיג
+    # Upload to index - uses INDEX_NAME from config
     if all_docs:
         try:
             search_client = SearchClient(indexer.search_endpoint, INDEX_NAME, indexer.credential)
             results = search_client.upload_documents(all_docs)
             succeeded = sum(1 for r in results if r.succeeded)
 
-            # הצג סטטיסטיקות
+            # Display statistics
             indexer.get_stats()
 
-            return f"✅ הועלו בהצלחה {succeeded} chunks מתוך {processed_videos + processed_documents} קבצים לאינדקס {INDEX_NAME}. דולגו {skipped_files} קבצים."
+            return f"✅ Successfully uploaded {succeeded} chunks from {processed_videos + processed_documents} files to index {INDEX_NAME}. Skipped {skipped_files} files."
 
         except Exception as e:
-            return f"❌ שגיאה בהעלאת המסמכים לאינדקס: {e}"
+            return f"❌ Error uploading documents to index: {e}"
     else:
-        return "⚠️ לא נמצאו מסמכים להעלאה (יתכן שכל הקבצים היו ריקים)."
+        return "⚠️ No documents found for upload (all files might have been empty)."
 
 
 def main():
@@ -1102,7 +1102,7 @@ def main():
     logger.info("🚀 Unified Content Indexer - Videos + Documents")
     logger.info("=" * 60)
 
-    logger.info("\n🎯 יצירת אינדקס מאוחד עם זיהוי אוטומטי של סוג הקובץ")
+    logger.info("\n🎯 Creating unified index with automatic file type detection")
 
     # Define blob paths to process - type will be auto-detected from path
     blob_paths = [
@@ -1176,3 +1176,4 @@ def main():
 if __name__ == "__main__":
     logger.info("running")
     main()
+

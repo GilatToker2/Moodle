@@ -1,6 +1,6 @@
 """
 Subject Detection Service
-מזהה סוג מקצוע (מתמטי/הומני) על בסיס רשימת קבצים וסרטונים
+Identifies subject type (mathematical/humanities) based on file and video lists
 """
 
 import re
@@ -17,7 +17,7 @@ from Config.logging_config import setup_logging
 logger = setup_logging()
 
 class SubjectDetector:
-    """מזהה סוג מקצוע על בסיס ניתוח קבצים וסרטונים"""
+    """Identifies subject type based on file and video analysis"""
 
     def __init__(self, max_vid: int = 5, max_doc: int = 5):
         self.blob_manager = BlobManager(container_name="processeddata")
@@ -28,70 +28,70 @@ class SubjectDetector:
         )
         self.max_vid = max_vid
         self.max_doc = max_doc
-        logger.info(f"🔧 מגבלות קבצים: מקסימום {self.max_vid} וידאו, {self.max_doc} מסמכים")
+        logger.info(f"🔧 File limits: maximum {self.max_vid} videos, {self.max_doc} documents")
 
     def extract_subject_type_from_video_md(self, md_content: str) -> Optional[str]:
         """
-        חילוץ סוג המקצוע מקובץ markdown של וידאו
+        Extract subject type from video markdown file
 
         Args:
-            md_content: תוכן קובץ ה-markdown
+            md_content: Markdown file content
 
         Returns:
-            "מתמטי" או "הומני" או None אם לא נמצא
+            "מתמטי" or "הומני" or None if not found
         """
-        logger.info("🎬 מתחיל חילוץ סוג מקצוע מקובץ וידאו markdown")
-        # חיפוש אחר הסקציה "סוג מקצוע"
+        logger.info("🎬 Starting subject type extraction from video markdown file")
+        # Search for the "Subject Type" section
         pattern = r'## 🎓 סוג מקצוע\s*\n\s*([^\n]+)'
         match = re.search(pattern, md_content)
 
         if match:
             subject_type = match.group(1).strip()
-            logger.info(f"✅ נמצא סוג מקצוע: {subject_type}")
+            logger.info(f"✅ Found subject type: {subject_type}")
             if subject_type in ['מתמטי', 'הומני']:
                 return subject_type
 
-        logger.info("⚠️ לא נמצא סוג מקצוע בקובץ הוידאו")
+        logger.info("⚠️ Subject type not found in video file")
         return None
 
     def extract_full_transcript_from_video_md(self, md_content: str) -> str:
         """
-        חילוץ הטרנסקריפט המלא מקובץ markdown של וידאו
+        Extract full transcript from video markdown file
 
         Args:
-            md_content: תוכן קובץ ה-markdown
+            md_content: Markdown file content
 
         Returns:
-            הטרנסקריפט המלא או מחרוזת ריקה
+            Full transcript or empty string
         """
-        logger.info("📄 מתחיל חילוץ טרנסקריפט מלא מקובץ וידאו")
-        # חיפוש אחר הסקציה "טרנסקריפט מלא"
+        logger.info("📄 Starting full transcript extraction from video file")
+        # Search for "Full Transcript" section
         pattern = r'## 📄 טרנסקריפט מלא\s*\n(.*?)(?=\n## |\n$)'
         match = re.search(pattern, md_content, re.DOTALL)
 
         if match:
             transcript = match.group(1).strip()
-            logger.info(f"✅ נמצא טרנסקריפט באורך {len(transcript)} תווים")
+            logger.info(f"✅ Found transcript with length {len(transcript)} characters")
             return transcript
 
-        logger.info("⚠️ לא נמצא טרנסקריפט בקובץ הוידאו")
+        logger.info("⚠️ No transcript found in video file")
         return ""
 
     def analyze_files_with_llm(self, file_contents: List[Dict[str, str]]) -> str:
         """
-        ניתוח קבצים באמצעות מודל שפה לקביעת סוג המקצוע
-        מגביל מספר קבצים לפי max_vid ו-max_doc
+        Analyze files using language model to determine subject type
+        Limits number of files according to max_vid and max_doc
 
         Args:
-            file_contents: רשימת מילונים עם 'path' ו-'content' של כל קובץ
+            file_contents: List of dictionaries with 'path' and 'content' of each file
 
         Returns:
-            "מתמטי" או "הומני"
+            "מתמטי" or "הומני"
         """
-        logger.info(f"🤖 מתחיל ניתוח עם מודל השפה עבור {len(file_contents)} קבצים")
-        logger.info(f"📏 מגבלות: מקסימום {self.max_vid} וידאו, {self.max_doc} מסמכים")
+        logger.info(f"🤖 Starting analysis with language model for {len(file_contents)} files")
+        logger.info(f"📏 Limits: maximum {self.max_vid} videos, {self.max_doc} documents")
 
-        # הפרדת קבצים לוידאו ומסמכים
+        # Separate files into videos and documents
         video_files = []
         doc_files = []
 
@@ -101,21 +101,21 @@ class SubjectDetector:
             else:
                 doc_files.append(file_info)
 
-        logger.info(f"  📊 נמצאו: {len(video_files)} וידאו, {len(doc_files)} מסמכים")
+        logger.info(f"  📊 Found: {len(video_files)} videos, {len(doc_files)} documents")
 
-        # הגבלת מספר הקבצים
+        # Limit number of files
         selected_videos = video_files[:self.max_vid]
         selected_docs = doc_files[:self.max_doc]
 
         if len(video_files) > self.max_vid:
-            logger.info(f"  ⚠️ הגבלתי וידאו ל-{self.max_vid} מתוך {len(video_files)}")
+            logger.info(f"  ⚠️ Limited videos to {self.max_vid} out of {len(video_files)}")
         if len(doc_files) > self.max_doc:
-            logger.info(f"  ⚠️ הגבלתי מסמכים ל-{self.max_doc} מתוך {len(doc_files)}")
+            logger.info(f"  ⚠️ Limited documents to {self.max_doc} out of {len(doc_files)}")
 
-        # שילוב הקבצים הנבחרים
+        # Combine selected files
         selected_files = selected_videos + selected_docs
 
-        logger.info(f"  ✅ מנתח {len(selected_files)} קבצים: {len(selected_videos)} וידאו + {len(selected_docs)} מסמכים")
+        logger.info(f"  ✅ Analyzing {len(selected_files)} files: {len(selected_videos)} videos + {len(selected_docs)} documents")
 
         # יצירת פרומפט עם הקבצים הנבחרים
         prompt = """אתה מומחה בסיווג תוכן אקדמי. עליך לנתח את התוכן הבא ולקבוע האם זה מקצוע מתמטי/טכני או הומני.
@@ -129,18 +129,18 @@ class SubjectDetector:
 """
 
         for i, file_info in enumerate(selected_files, 1):
-            logger.info(f"  📄 מוסיף לניתוח קובץ {i}: {file_info['path']}")
+            logger.info(f"  📄 Adding file {i} to analysis: {file_info['path']}")
             prompt += f"\n--- קובץ {i}: {file_info['path']} ---\n"
 
-            # אם זה וידאו, השתמש בטרנסקריפט המלא בלבד
+            # If it's a video, use only the full transcript
             if '/Videos_md/' in file_info['path']:
                 transcript = self.extract_full_transcript_from_video_md(file_info['content'])
                 content = transcript if transcript else file_info['content']
-                logger.info(f"    🎬 וידאו - אורך טרנסקריפט: {len(content)} תווים")
+                logger.info(f"    🎬 Video - transcript length: {len(content)} characters")
             else:
-                # עבור מסמכים, קח את כל התוכן
+                # For documents, take all content
                 content = file_info['content']
-                logger.info(f"    📋 מסמך - אורך תוכן: {len(content)} תווים")
+                logger.info(f"    📋 Document - content length: {len(content)} characters")
 
             prompt += content
             prompt += "\n" + "="*50 + "\n"
@@ -152,8 +152,8 @@ class SubjectDetector:
 
 תשובה:"""
 
-        logger.info(f"  📊 אורך פרומפט כולל: {len(prompt)} תווים")
-        logger.info(f"  🔄 שולח בקשה למודל השפה...")
+        logger.info(f"  📊 Total prompt length: {len(prompt)} characters")
+        logger.info(f"  🔄 Sending request to language model...")
 
         try:
             response = self.client.chat.completions.create(
@@ -167,41 +167,41 @@ class SubjectDetector:
             )
 
             result = response.choices[0].message.content.strip()
-            logger.info(f"  🎯 תשובת המודל: '{result}'")
+            logger.info(f"  🎯 Model response: '{result}'")
 
-            # וידוא שהתשובה תקינה
+            # Validate response is correct
             if result in ['מתמטי', 'הומני']:
-                logger.info(f"  ✅ תשובה תקינה: {result}")
+                logger.info(f"  ✅ Valid response: {result}")
                 return result
             else:
-                logger.info(f"  ⚠️ תשובה לא צפויה מהמודל: {result}, מחזיר 'לא זוהה'")
+                logger.info(f"  ⚠️ Unexpected response from model: {result}, returning 'לא זוהה'")
                 return "לא זוהה"
 
         except Exception as e:
-            logger.info(f"  ❌ שגיאה בניתוח עם מודל השפה: {e}")
+            logger.info(f"  ❌ Error in analysis with language model: {e}")
             return "לא זוהה"
 
     def detect_subject_from_course_path(self, course_path: str) -> str:
         """
-        זיהוי סוג המקצוע על בסיס path לblob של קורס
+        Identify subject type based on course blob path
 
-        הלוגיקה:
-        1. מוצא את כל קבצי הוידאו והמסמכים בקורס
-        2. אם יש יותר מ-2 קבצי וידאו עם subject_type זהה - מחזיר אותו
-        3. אחרת - מעביר למודל שפה לניתוח של כל הקבצים
+        Logic:
+        1. Find all video and document files in course
+        2. If there are more than 2 video files with same subject_type - return it
+        3. Otherwise - pass to language model for analysis of all files
 
         Args:
-            course_path: נתיב לקורס ב-blob storage (למשל: "CS101")
+            course_path: Course path in blob storage (e.g., "CS101")
 
         Returns:
-            "מתמטי", "הומני", או "לא זוהה"
+            "מתמטי", "הומני", or "לא זוהה"
         """
-        logger.info(f"🎓 מתחיל זיהוי סוג מקצוע עבור קורס: {course_path}")
+        logger.info(f"🎓 Starting subject type identification for course: {course_path}")
 
-        # מציאת כל הקבצים בקורס
+        # Find all files in course
         all_files = self.blob_manager.list_files()
 
-        # סינון קבצים שמתחילים ב-course_path ומסתיימים ב-.md
+        # Filter files that start with course_path and end with .md
         course_files = [
             f for f in all_files
             if f.startswith(course_path + "/") and f.endswith(".md") and
@@ -209,43 +209,43 @@ class SubjectDetector:
         ]
 
         if not course_files:
-            logger.info(f"  ❌ לא נמצאו קבצים בקורס: {course_path}")
+            logger.info(f"  ❌ No files found in course: {course_path}")
             return "לא זוהה"
 
-        logger.info(f"  📁 נמצאו {len(course_files)} קבצים בקורס:")
+        logger.info(f"  📁 Found {len(course_files)} files in course:")
         for file in course_files:
             logger.info(f"    - {file}")
 
-        # קריאה לפונקציה הקיימת עם רשימת הקבצים
+        # Call existing function with file list
         return self.detect_subject(course_files)
 
     def detect_subject(self, file_paths: List[str]) -> str:
         """
-        זיהוי סוג המקצוע על בסיס רשימת קבצים
+        Identify subject type based on file list
 
-        הלוגיקה:
-        1. אם כל הוידאו עם subject_type זהה - מחזיר אותו
-        2. אחרת - מעביר למודל שפה לניתוח
+        Logic:
+        1. If all videos have same subject_type - return it
+        2. Otherwise - pass to language model for analysis
 
         Args:
-            file_paths: רשימת נתיבי קבצים ב-blob storage
+            file_paths: List of file paths in blob storage
 
         Returns:
-            "מתמטי", "הומני", או "לא זוהה"
+            "מתמטי", "הומני", or "לא זוהה"
         """
-        logger.info(f"🔍 מזהה סוג מקצוע עבור {len(file_paths)} קבצים")
+        logger.info(f"🔍 Identifying subject type for {len(file_paths)} files")
 
         video_subject_types = []
         file_contents = []
 
-        # עיבוד כל קובץ
+        # Process each file
         for file_path in file_paths:
-            logger.info(f"  📄 מעבד קובץ: {file_path}")
+            logger.info(f"  📄 Processing file: {file_path}")
 
-            # הורדת תוכן הקובץ
+            # Download file content
             content = self.blob_manager.download_to_memory(file_path)
             if not content:
-                logger.info(f"    ⚠️ לא ניתן להוריד קובץ: {file_path}")
+                logger.info(f"    ⚠️ Cannot download file: {file_path}")
                 continue
 
             try:
@@ -255,98 +255,98 @@ class SubjectDetector:
                     'content': md_content
                 })
 
-                # אם זה קובץ וידאו, נסה לחלץ subject_type
+                # If it's a video file, try to extract subject_type
                 if '/Videos_md/' in file_path:
                     subject_type = self.extract_subject_type_from_video_md(md_content)
                     if subject_type:
                         video_subject_types.append(subject_type)
-                        logger.info(f"    ✅ נמצא סוג מקצוע: {subject_type}")
+                        logger.info(f"    ✅ Found subject type: {subject_type}")
                     else:
-                        logger.info(f"    ⚠️ לא נמצא סוג מקצוע בוידאו")
+                        logger.info(f"    ⚠️ No subject type found in video")
 
             except UnicodeDecodeError:
-                logger.info(f"    ❌ שגיאה בקריאת קובץ: {file_path}")
+                logger.info(f"    ❌ Error reading file: {file_path}")
                 continue
 
-        # בדיקה אם כל הוידאו עם אותו subject_type (רק אם יש לפחות 2 וידאו)
+        # Check if all videos have same subject_type (only if there are at least 2 videos)
         if len(video_subject_types) >= 2:
             unique_types = list(set(video_subject_types))
-            logger.info(f"  📊 נמצאו סוגי מקצוע בוידאו: {video_subject_types}")
+            logger.info(f"  📊 Found subject types in videos: {video_subject_types}")
 
             if len(unique_types) == 1:
                 result = unique_types[0]
-                logger.info(f"  ✅ כל הוידאו ({len(video_subject_types)}) עם אותו סוג מקצוע: {result}")
+                logger.info(f"  ✅ All videos ({len(video_subject_types)}) have same subject type: {result}")
                 return result
             else:
-                logger.info(f"  🔄 נמצאו סוגי מקצוע שונים בוידאו, מעביר למודל שפה")
+                logger.info(f"  🔄 Found different subject types in videos, passing to language model")
         elif len(video_subject_types) == 1:
-            logger.info(f"  ⚠️ נמצא רק וידאו אחד עם סוג מקצוע: {video_subject_types[0]}, מעביר למודל שפה לאימות")
+            logger.info(f"  ⚠️ Found only one video with subject type: {video_subject_types[0]}, passing to language model for validation")
         else:
-            logger.info(f"  🔄 לא נמצאו וידאו עם סוג מקצוע מוגדר, מעביר למודל שפה")
+            logger.info(f"  🔄 No videos with defined subject type found, passing to language model")
 
-        # אם אין הסכמה או אין וידאו עם subject_type, השתמש במודל שפה
+        # If no agreement or no videos with subject_type, use language model
         if not file_contents:
-            logger.info("  ❌ אין תוכן לניתוח")
+            logger.info("  ❌ No content for analysis")
             return "לא זוהה"
 
-        logger.info(f"  🤖 מנתח {len(file_contents)} קבצים עם מודל שפה...")
+        logger.info(f"  🤖 Analyzing {len(file_contents)} files with language model...")
         result = self.analyze_files_with_llm(file_contents)
-        logger.info(f"  ✅ תוצאת ניתוח מודל השפה: {result}")
+        logger.info(f"  ✅ Language model analysis result: {result}")
 
         return result
 
 
 def detect_subject_from_paths(file_paths: List[str], max_vid: int = 5, max_doc: int = 5) -> str:
     """
-    פונקציה נוחה לזיהוי סוג מקצוע מרשימת קבצים
+    Convenient function for subject type identification from file list
 
     Args:
-        file_paths: רשימת נתיבי קבצים ב-blob storage
-        max_vid: מספר מקסימלי של קבצי וידאו לניתוח
-        max_doc: מספר מקסימלי של קבצי מסמכים לניתוח
+        file_paths: List of file paths in blob storage
+        max_vid: Maximum number of video files for analysis
+        max_doc: Maximum number of document files for analysis
 
     Returns:
-        "מתמטי", "הומני", או "לא זוהה"
+        "מתמטי", "הומני", or "לא זוהה"
     """
-    logger.info(f"🚀 מתחיל זיהוי סוג מקצוע עבור {len(file_paths)} קבצים")
+    logger.info(f"🚀 Starting subject type identification for {len(file_paths)} files")
     detector = SubjectDetector(max_vid=max_vid, max_doc=max_doc)
     return detector.detect_subject(file_paths)
 
 
 def detect_subject_from_course(course_path: str, max_vid: int = 5, max_doc: int = 5) -> str:
     """
-    פונקציה נוחה לזיהוי סוג מקצוע מ-path של קורס
+    Convenient function for subject type identification from course path
 
     Args:
-        course_path: נתיב לקורס ב-blob storage (למשל: "CS101")
-        max_vid: מספר מקסימלי של קבצי וידאו לניתוח
-        max_doc: מספר מקסימלי של קבצי מסמכים לניתוח
+        course_path: Course path in blob storage (e.g., "CS101")
+        max_vid: Maximum number of video files for analysis
+        max_doc: Maximum number of document files for analysis
 
     Returns:
-        "מתמטי", "הומני", או "לא זוהה"
+        "מתמטי", "הומני", or "לא זוהה"
     """
-    logger.info(f"🎯 מתחיל זיהוי סוג מקצוע עבור קורס: {course_path}")
+    logger.info(f"🎯 Starting subject type identification for course: {course_path}")
     detector = SubjectDetector(max_vid=max_vid, max_doc=max_doc)
     return detector.detect_subject_from_course_path(course_path)
 
 
 if __name__ == "__main__":
-    # בדיקה של הפונקציה
-    logger.info("🧪 בדיקת זיהוי סוג מקצוע")
+    # Function testing
+    logger.info("🧪 Subject type identification testing")
     logger.info("=" * 50)
 
-    # בדיקה 1: זיהוי מקורס שלם (הפונקציה החדשה)
-    logger.info("\n🔍 בדיקה 1: זיהוי סוג מקצוע מקורס שלם")
+    # Test 1: Identification from full course (new function)
+    logger.info("\n🔍 Test 1: Subject type identification from full course")
     logger.info("-" * 40)
 
     course_path = "CS101"
 
     try:
         result = detect_subject_from_course(course_path)
-        logger.info(f"🎯 תוצאה עבור קורס {course_path}: {result}")
+        logger.info(f"🎯 Result for course {course_path}: {result}")
     except Exception as e:
-        logger.info(f"❌ שגיאה בבדיקת קורס: {e}")
+        logger.info(f"❌ Error in course testing: {e}")
         import traceback
         traceback.logger.info_exc()
 
-    logger.info("\n✅ בדיקות הושלמו!")
+    logger.info("\n✅ Tests completed!")

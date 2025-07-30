@@ -147,11 +147,11 @@ class FreeChatResponse(BaseModel):
 
 @app.get("/", tags=["System"])
 async def root():
-    """דף בית - מידע כללי על המערכת"""
+    """Home page - General system information"""
     return {
-        "message": "🎓 מערכת עיבוד תוכן אקדמי",
+        "message": "🎓 Academic Content Processing System",
         "version": "1.0.0",
-        "status": "פעיל",
+        "status": "Active",
         "functions": [
             "📄 /process/document - Convert documents to Markdown",
             "🎥 /process/video - Process videos with transcription",
@@ -283,7 +283,7 @@ async def process_video_file(request: ProcessVideoRequest):
     - blob_path: Path to the created markdown file in blob storage (or None if failed)
     """
     try:
-        logger.info(f"🎥 מתחיל עיבוד וידאו: {request.video_name}")
+        logger.info(f"🎥 Starting video processing: {request.video_name}")
         logger.info(f"📍 CourseID: {request.course_id}, SectionID: {request.section_id}, FileID: {request.file_id}")
         logger.debug(f"🔗 VideoURL: {request.video_url}")
 
@@ -308,13 +308,13 @@ async def process_video_file(request: ProcessVideoRequest):
         )
 
         if result_blob_path:
-            logger.info(f"✅ עיבוד הושלם בהצלחה: {result_blob_path}")
+            logger.info(f"✅ Processing completed successfully: {result_blob_path}")
             return ProcessVideoResponse(
                 success=True,
                 blob_path=result_blob_path
             )
         else:
-            logger.error("❌ עיבוד הוידאו נכשל")
+            logger.error("❌ Video processing failed")
             return ProcessVideoResponse(
                 success=False,
                 blob_path=None
@@ -324,7 +324,7 @@ async def process_video_file(request: ProcessVideoRequest):
         # Re-raise HTTP exceptions (like validation errors)
         raise
     except Exception as e:
-        logger.error(f"❌ שגיאה בעיבוד הוידאו: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error in video processing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
 
 
@@ -813,7 +813,7 @@ async def detect_subject_type(request: DetectSubjectRequest):
     - subject_type: Detected subject type ("מתמטי", "הומני", or "לא זוהה")
     """
     try:
-        logger.info(f"🎯 מתחיל זיהוי סוג מקצוע עבור קורס: {request.course_path}")
+        logger.info(f"🎯 Starting subject type detection for course: {request.course_path}")
 
         # Call the subject detection function
         subject_type = detect_subject_from_course(
@@ -838,7 +838,7 @@ async def detect_subject_type(request: DetectSubjectRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.info(f"❌ שגיאה בזיהוי סוג מקצוע: {e}")
+        logger.info(f"❌ Error in subject type detection: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Error detecting subject type: {str(e)}"
@@ -846,7 +846,7 @@ async def detect_subject_type(request: DetectSubjectRequest):
 
 
 # ================================
-# 🚀 הרצת השרת
+# 🚀 SERVER STARTUP
 # ================================
 
 if __name__ == "__main__":
