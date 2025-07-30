@@ -168,7 +168,7 @@ class VideoIndexerManager:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Error uploading video: {str(e)}")
 
-    def wait_for_indexing(self, video_id: str, interval: int = 10, max_wait_minutes: int = 180) -> Dict:
+    def wait_for_indexing(self, video_id: str, interval: int = 10, max_wait_minutes: int = 300) -> Dict:
         """Wait for video processing completion in Video Indexer"""
         logger.info(f"⏳ Waiting for video processing completion {video_id}...")
 
