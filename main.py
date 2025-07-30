@@ -297,8 +297,8 @@ async def process_video_file(request: ProcessVideoRequest):
         if request.file_id is None or request.file_id < 0:
             raise HTTPException(status_code=422, detail="file_id must be a non-negative integer")
 
-        # Process video from blob storage with new parameters
-        result_blob_path = video_processor.process_video_to_md(
+        # Start async video processing - returns immediately with target path
+        result_blob_path = await video_processor.process_video_to_md(
             request.course_id,
             request.section_id,
             request.file_id,
@@ -308,13 +308,14 @@ async def process_video_file(request: ProcessVideoRequest):
         )
 
         if result_blob_path:
-            logger.info(f"✅ Processing completed successfully: {result_blob_path}")
+            logger.info(f"✅ Video processing started successfully, target path: {result_blob_path}")
+            logger.info(f"🚀 Processing continues in background")
             return ProcessVideoResponse(
                 success=True,
                 blob_path=result_blob_path
             )
         else:
-            logger.error("❌ Video processing failed")
+            logger.error("❌ Video processing failed to start")
             return ProcessVideoResponse(
                 success=False,
                 blob_path=None

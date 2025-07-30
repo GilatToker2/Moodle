@@ -1,7 +1,7 @@
 import requests
 import time
 import os
-import subprocess
+import asyncio
 from datetime import datetime
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
@@ -19,6 +19,8 @@ from Source.Services.blob_manager import BlobManager
 from Config.logging_config import setup_logging
 
 logger = setup_logging()
+
+
 class VideoIndexerManager:
     """
     Video processing manager using Azure Video Indexer
@@ -69,7 +71,6 @@ class VideoIndexerManager:
 
         return self._access_token
 
-
     def _should_refresh_token(self):
         """Check if token needs to be refreshed"""
         if not self._access_token:
@@ -111,7 +112,6 @@ class VideoIndexerManager:
         except Exception as e:
             logger.info(f"❌ Error refreshing token: {e}")
 
-
     def _extract_token_expiry(self, token):
         try:
             # Instead of decoding the token, simply set it as valid for one hour from now
@@ -120,7 +120,6 @@ class VideoIndexerManager:
 
         except Exception as e:
             logger.info(f"⚠️ Error setting expiry time: {e}")
-
 
     def _get_params_with_token(self, additional_params=None):
         """Get parameters with access token."""
@@ -168,8 +167,8 @@ class VideoIndexerManager:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Error uploading video: {str(e)}")
 
-    def wait_for_indexing(self, video_id: str, interval: int = 10, max_wait_minutes: int = 300) -> Dict:
-        """Wait for video processing completion in Video Indexer"""
+    async def wait_for_indexing(self, video_id: str, interval: int = 10, max_wait_minutes: int = 300) -> Dict:
+        """Wait for video processing completion in Video Indexer (async)"""
         logger.info(f"⏳ Waiting for video processing completion {video_id}...")
 
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Index"
@@ -196,7 +195,7 @@ class VideoIndexerManager:
                 if elapsed_time > max_wait_seconds:
                     raise TimeoutError(f"Video processing took more than {max_wait_minutes} minutes")
 
-                time.sleep(interval)
+                await asyncio.sleep(interval)
 
             except requests.exceptions.RequestException as e:
                 raise RuntimeError(f"Error checking processing status: {str(e)}")
@@ -280,7 +279,8 @@ class VideoIndexerManager:
         if current_segment is not None:
             merged_segments.append(current_segment)
 
-        logger.info(f"  🔗 Merging segments: {len(segments)} → {len(merged_segments)} (max {max_duration_seconds} seconds)")
+        logger.info(
+            f"  🔗 Merging segments: {len(segments)} → {len(merged_segments)} (max {max_duration_seconds} seconds)")
         return merged_segments
 
     def create_textual_summary(self, video_id: str, deployment_name: str = "gpt-4o") -> str:
@@ -311,8 +311,8 @@ class VideoIndexerManager:
             else:
                 raise
 
-    def get_textual_summary(self, video_id: str, summary_id: str) -> str:
-        """Get textual summary after it's ready"""
+    async def get_textual_summary(self, video_id: str, summary_id: str) -> str:
+        """Get textual summary after it's ready (async)"""
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Summaries/Textual/{summary_id}"
 
         while True:
@@ -329,7 +329,7 @@ class VideoIndexerManager:
                 raise RuntimeError(f"Summary creation failed: {data}")
             else:
                 logger.info(f"  ⏳ Summary state: {state} — waiting...")
-                time.sleep(10)
+                await asyncio.sleep(10)
 
     def delete_video(self, video_id: str) -> bool:
         """Delete video from Video Indexer to clean up unnecessary containers"""
@@ -509,10 +509,11 @@ class VideoIndexerManager:
 
         return "\n".join(md_content)
 
-
-    def process_video_to_md(self, course_id: str, section_id: str, file_id: int, video_name: str, video_url: str, merge_segments_duration: Optional[int] = 30) -> str | None:
+    async def process_video_to_md(self, course_id: str, section_id: str, file_id: int, video_name: str, video_url: str,
+                                  merge_segments_duration: Optional[int] = 30) -> str | None:
         """
-        Process video from blob storage to create markdown file
+        NON-BLOCKING: Process video from blob storage to create markdown file
+        Returns target path immediately after uploading video, processing continues in background
 
         Args:
             course_id: Course identifier
@@ -523,11 +524,10 @@ class VideoIndexerManager:
             merge_segments_duration: Maximum duration in seconds for merging segments
 
         Returns:
-            File path in blob storage or None if failed
+            File path in blob storage where final result will be saved, or None if upload failed
         """
-        # Create blob managers - one for reading from raw-data and one for writing to processeddata
+        # Create blob manager for reading from raw-data
         blob_manager_read = BlobManager(container_name="raw-data")
-        blob_manager_write = BlobManager(container_name="processeddata")
 
         # Check file extension
         file_ext = os.path.splitext(video_url)[1].lower()
@@ -543,21 +543,55 @@ class VideoIndexerManager:
             logger.info(f"❌ Failed to create SAS URL for video: {video_url}")
             return None
 
-        logger.info(f"🔄 Processing video: {video_name}")
+        logger.info(f"🔄 Starting NON-BLOCKING video processing: {video_name}")
 
         try:
-            logger.info(f"\n🎬 Starting video processing to MD: {video_name}")
+            logger.info(f"📤 Uploading video to Video Indexer: {video_name}")
 
-            # Upload and process to Video Indexer with video name
+            # Upload video to Video Indexer (this is quick)
             video_id = self.upload_video_from_url(video_sas_url, video_name)
-            index_data = self.wait_for_indexing(video_id)
+
+            # Create target path immediately
+            target_blob_path = f"{course_id}/{section_id}/Videos_md/{file_id}.md"
+
+            logger.info(f"✅ Video uploaded successfully! Video ID: {video_id}")
+            logger.info(f"🚀 Starting background processing for: {video_name}")
+            logger.info(f"📁 Final result will be saved to: {target_blob_path}")
+
+            # Start background processing as async task
+            asyncio.create_task(
+                self._background_process_video(
+                    video_id,
+                    course_id,
+                    section_id,
+                    file_id,
+                    video_name,
+                    merge_segments_duration
+                )
+            )
+
+            # Return target path immediately - processing continues in background
+            return target_blob_path
+
+        except Exception as e:
+            logger.info(f"❌ Video upload failed: {str(e)}")
+            return None
+
+    async def _background_process_video(self, video_id: str, course_id: str, section_id: str, file_id: int,
+                                        video_name: str, merge_segments_duration: Optional[int] = 30):
+        """Background processing of video after upload - runs as async task"""
+        try:
+            logger.info(f"🔄 Background processing started for video: {video_name} (ID: {video_id})")
+
+            # Wait for indexing to complete
+            index_data = await self.wait_for_indexing(video_id)
 
             # Create GPT summary
             logger.info("  📝 Creating GPT summary...")
             summary_text = ""
             try:
                 summary_id = self.create_textual_summary(video_id)
-                summary_text = self.get_textual_summary(video_id, summary_id)
+                summary_text = await self.get_textual_summary(video_id, summary_id)
                 logger.info(f"  ✅ Received summary with length: {len(summary_text)} characters")
             except Exception as e:
                 logger.info(f"  ⚠️ GPT summary creation failed, continuing without summary: {e}")
@@ -591,42 +625,36 @@ class VideoIndexerManager:
             logger.info(f"  ✅ Processing completed successfully!")
             logger.info(f"  📊 Found {len(transcript_segments)} transcript segments")
 
-        except Exception as e:
-            logger.info(f"❌ Video processing failed: {str(e)}")
-            return None
+            # Create target path and upload final result
+            target_blob_path = f"{course_id}/{section_id}/Videos_md/{file_id}.md"
+            blob_manager_write = BlobManager(container_name="processeddata")
 
-        # Create target path according to structure: CourseID/SectionID/Videos_md/FileID.md
-        target_blob_path = f"{course_id}/{section_id}/Videos_md/{file_id}.md"
+            logger.info(f"📤 Uploading final result to processeddata container: {target_blob_path}")
+            success = blob_manager_write.upload_text_to_blob(
+                text_content=md_content,
+                blob_name=target_blob_path
+            )
 
-        logger.info(f"📤 Uploading to processeddata container: {target_blob_path}")
+            if success:
+                logger.info(f"✅ Final file uploaded successfully to processeddata container: {target_blob_path}")
+            else:
+                logger.info(f"❌ Failed to upload final file to processeddata container")
 
-        # Save to processeddata container
-        success = blob_manager_write.upload_text_to_blob(
-            text_content=md_content,
-            blob_name=target_blob_path
-        )
-
-        if success:
-            logger.info(f"✅ File uploaded successfully to processeddata container: {target_blob_path}")
-
-            # Cleanup: delete video from Video Indexer to clean up unnecessary containers
+            # Cleanup: delete video from Video Indexer
             logger.info("🧹 Cleaning up unnecessary containers...")
             self.delete_video(video_id)
 
-            return target_blob_path
-        else:
-            logger.info(f"❌ Failed to upload file to processeddata container")
-            return None
+        except Exception as e:
+            logger.info(f"❌ Background video processing failed for {video_name}: {str(e)}")
 
 
-if __name__ == "__main__":
+async def main():
     # Process video from blob storage with new parameters
     course_id = "Information_systems"
     section_id = "Section1"
-    file_id = 11122
+    file_id = 101
     video_name = "L1 - A "
-    video_url = "L_A_Information_system.mp4"
-
+    video_url = "A-יסודות מערכות מידע - שעור (06-11-2024) - T.mp4"
 
     logger.info(f"🧪 Processing video: {video_name}")
     logger.info(f"📍 CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
@@ -634,13 +662,18 @@ if __name__ == "__main__":
 
     try:
         manager = VideoIndexerManager()
-        result = manager.process_video_to_md(course_id, section_id, file_id, video_name, video_url, merge_segments_duration=20)
+        result = await manager.process_video_to_md(course_id, section_id, file_id, video_name, video_url,
+                                                   merge_segments_duration=20)
 
         if result:
-            logger.info(f"\n🎉 Video processed successfully: {result}")
-            logger.info(f"📁 File saved in structure: {course_id}/{section_id}/Videos_md/{file_id}.md")
+            logger.info(f"\n🎉 Video processing started successfully: {result}")
+            logger.info(f"📁 Final file will be saved to: {course_id}/{section_id}/Videos_md/{file_id}.md")
+            logger.info(f"🚀 Processing continues in background...")
         else:
             logger.info(f"\n❌ Video processing failed: {video_name}")
 
     except Exception as e:
         logger.info(f"❌ Error processing video: {e}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
