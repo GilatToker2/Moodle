@@ -42,7 +42,7 @@ class ContentSummarizer:
 
         # Create BlobManager for accessing files in blob storage
         self.blob_manager = BlobManager()
-        logger.info(f"✅ ContentSummarizer initialized with model: {self.model_name}")
+        logger.info(f"ContentSummarizer initialized with model: {self.model_name}")
 
     def _get_video_summary_prompt(self, subject_type: str = None, existing_summary: str = None) -> str:
         """Prepare prompt for video summarization with adaptation to subject type and existing summary if available"""
@@ -212,7 +212,7 @@ class ContentSummarizer:
         Returns:
             Dictionary with different parts of the file
         """
-        logger.info(f"📖 Parsing video MD file: {md_file_path}")
+        logger.info(f"Parsing video MD file: {md_file_path}")
 
         if not os.path.exists(md_file_path):
             raise FileNotFoundError(f"File not found: {md_file_path}")
@@ -345,14 +345,14 @@ class ContentSummarizer:
         Returns:
             Generated summary
         """
-        logger.info(f"📝 Creating summary for {content_type} content...")
-        logger.info(f"📊 Content length: {len(content)} characters")
+        logger.info(f"Creating summary for {content_type} content...")
+        logger.info(f"Content length: {len(content)} characters")
 
         try:
             # Choose prompt by content type
             if content_type.lower() == "video":
-                logger.info(f"🎓 Subject type: {subject_type}")
-                logger.info(f"📝 Has existing summary: {bool(existing_summary)}")
+                logger.info(f"Subject type: {subject_type}")
+                logger.info(f"Has existing summary: {bool(existing_summary)}")
                 system_prompt = self._get_video_summary_prompt(
                     subject_type=subject_type,
                     existing_summary=existing_summary
@@ -373,7 +373,7 @@ class ContentSummarizer:
             ]
 
             # Call language model
-            logger.info(f"🤖 Calling {self.model_name} for summarization...")
+            logger.info(f"Calling {self.model_name} for summarization...")
             response = await self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
@@ -383,13 +383,13 @@ class ContentSummarizer:
 
             summary = response.choices[0].message.content
 
-            logger.info(f"✅ Summary created successfully!")
-            logger.info(f"📊 Summary length: {len(summary)} characters")
+            logger.info(f"Summary created successfully!")
+            logger.info(f"Summary length: {len(summary)} characters")
 
             return summary
 
         except Exception as e:
-            logger.info(f"❌ Error creating summary: {e}")
+            logger.info(f"Error creating summary: {e}")
             return f"Error creating summary: {str(e)}"
 
     def _detect_content_type_from_path(self, blob_path: str) -> str:
@@ -428,35 +428,35 @@ class ContentSummarizer:
         Returns:
             Summary path in blob or None if failed
         """
-        logger.info(f"📖 Processing MD file from blob: {blob_path}")
+        logger.info(f"Processing MD file from blob: {blob_path}")
 
         try:
             # Identify content type from path
             content_type = self._detect_content_type_from_path(blob_path)
-            logger.info(f"  📋 Identified as type: {content_type}")
+            logger.info(f"Identified as type: {content_type}")
 
             if content_type == "unknown":
-                logger.info(f"❌ Cannot identify file type for: {blob_path}")
+                logger.info(f"Cannot identify file type for: {blob_path}")
                 return None
 
             # Download file from blob
             temp_file_path = f"temp_{os.path.basename(blob_path)}"
 
             if not self.blob_manager.download_file(blob_path, temp_file_path):
-                logger.info(f"❌ Failed to download file from blob: {blob_path}")
+                logger.info(f"Failed to download file from blob: {blob_path}")
                 return None
 
             try:
                 # If it's a video file - use advanced parsing
                 if content_type == "video":
-                    logger.info("🎬 Video file detected - using enhanced parsing and summarization")
+                    logger.info("Video file detected - using enhanced parsing and summarization")
 
                     # Parse file into different parts
                     parsed_data = self.parse_video_md_file(temp_file_path)
 
                     # Check that transcript exists
                     if not parsed_data.get("full_transcript"):
-                        logger.info(f"❌ No transcript found in video file")
+                        logger.info(f"No transcript found in video file")
                         return None
 
                     # Create summary with parsed parameters
@@ -475,7 +475,7 @@ class ContentSummarizer:
                         content = f.read()
 
                     if not content.strip():
-                        logger.info(f"❌ File is empty")
+                        logger.info(f"File is empty")
                         return None
 
                     # Create summary
@@ -483,16 +483,16 @@ class ContentSummarizer:
 
                 # Check that summary was created successfully
                 if not summary or summary.startswith("Error"):
-                    logger.info(f"❌ Failed to create summary")
+                    logger.info(f"Failed to create summary")
                     return None
 
                 # Save summary to blob
                 blob_summary_path = self._save_summary_to_blob(summary, blob_path)
                 if blob_summary_path:
-                    logger.info(f"✅ Summary saved to blob: {blob_summary_path}")
+                    logger.info(f"Summary saved to blob: {blob_summary_path}")
                     return blob_summary_path
                 else:
-                    logger.info(f"❌ Failed to save summary to blob")
+                    logger.info(f"Failed to save summary to blob")
                     return None
 
             finally:
@@ -501,7 +501,7 @@ class ContentSummarizer:
                     os.remove(temp_file_path)
 
         except Exception as e:
-            logger.info(f"❌ Error processing file: {str(e)}")
+            logger.info(f"Error processing file: {str(e)}")
             return None
 
     def _save_summary_to_blob(self, summary: str, original_blob_path: str) -> str:
@@ -521,7 +521,7 @@ class ContentSummarizer:
             path_parts = original_blob_path.split('/')
 
             if len(path_parts) < 4:
-                logger.info(f"❌ Invalid path: {original_blob_path}")
+                logger.info(f"Invalid path: {original_blob_path}")
                 return None
 
             course_id = path_parts[0]  # CS101
@@ -547,11 +547,11 @@ class ContentSummarizer:
             if success:
                 return summary_blob_path
             else:
-                logger.info(f"❌ Failed to save summary to blob")
+                logger.info(f"Failed to save summary to blob")
                 return None
 
         except Exception as e:
-            logger.info(f"❌ Error saving summary to blob: {str(e)}")
+            logger.info(f"Error saving summary to blob: {str(e)}")
             return None
 
     async def summarize_section_from_blob(self, full_blob_path: str) -> str | None:
@@ -568,16 +568,16 @@ class ContentSummarizer:
             path_parts = full_blob_path.split('/')
 
             if len(path_parts) < 3:
-                logger.info(f"❌ Invalid path: {full_blob_path}. Should be in format: CourseID/SectionID/file_summaries")
+                logger.info(f"Invalid path: {full_blob_path}. Should be in format: CourseID/SectionID/file_summaries")
                 return None
 
             course_id = path_parts[0]  # CS101
             section_id = path_parts[1]  # Section1
             # path_parts[2] should be file_summaries
 
-            logger.info(f"📁 CourseID: {course_id}")
-            logger.info(f"📂 SectionID: {section_id}")
-            logger.info(f"📂 file_summaries path: {full_blob_path}")
+            logger.info(f"CourseID: {course_id}")
+            logger.info(f"SectionID: {section_id}")
+            logger.info(f"file_summaries path: {full_blob_path}")
 
             # Create BlobManager with default container
             blob_manager = BlobManager()
@@ -589,10 +589,10 @@ class ContentSummarizer:
             section_files = [f for f in all_files if f.startswith(full_blob_path + "/") and f.endswith(".md")]
 
             if not section_files:
-                logger.info(f"❌ No summary files found in {full_blob_path}")
+                logger.info(f"No summary files found in {full_blob_path}")
                 return None
 
-            logger.info(f"📁 Found {len(section_files)} summary files in {full_blob_path}:")
+            logger.info(f"Found {len(section_files)} summary files in {full_blob_path}:")
             for file in section_files:
                 logger.info(f"  - {file}")
 
@@ -601,7 +601,7 @@ class ContentSummarizer:
             successful_files = []
 
             for file_path in section_files:
-                logger.info(f"\n📥 Downloading file to memory: {file_path}")
+                logger.info(f"\n Downloading file to memory: {file_path}")
 
                 try:
                     # Download file directly to memory
@@ -617,25 +617,25 @@ class ContentSummarizer:
                             all_content += f"{'=' * 50}\n\n"
                             all_content += file_content
                             successful_files.append(file_path)
-                            logger.info(f"✅ File read successfully: {len(file_content)} characters")
+                            logger.info(f" File read successfully: {len(file_content)} characters")
                         else:
-                            logger.info(f"⚠️ Empty file: {file_path}")
+                            logger.info(f"Empty file: {file_path}")
                     else:
-                        logger.info(f"❌ Failed to download file: {file_path}")
+                        logger.info(f"Failed to download file: {file_path}")
 
                 except Exception as e:
-                    logger.info(f"❌ Error processing file {file_path}: {e}")
+                    logger.info(f"Error processing file {file_path}: {e}")
                     continue
 
             if not successful_files:
-                logger.info(f"❌ Could not read any files from {full_blob_path}")
+                logger.info(f"Could not read any files from {full_blob_path}")
                 return None
 
-            logger.info(f"\n📊 Total working with {len(successful_files)} files")
-            logger.info(f"📊 Total content length: {len(all_content)} characters")
+            logger.info(f"\n Total working with {len(successful_files)} files")
+            logger.info(f"Total content length: {len(all_content)} characters")
 
             # Create summary
-            logger.info(f"\n🤖 Creating section summary...")
+            logger.info(f"\n Creating section summary...")
 
             # Prepare special prompt for section summary
             system_prompt = self._get_section_summary_prompt()
@@ -661,13 +661,13 @@ class ContentSummarizer:
 
             section_summary = response.choices[0].message.content
 
-            logger.info(f"✅ Section summary created successfully!")
-            logger.info(f"📊 Summary length: {len(section_summary)} characters")
+            logger.info(f" Section summary created successfully!")
+            logger.info(f" Summary length: {len(section_summary)} characters")
 
             # Save summary to blob in new structure: CourseID/section_summaries/SectionID.md
             summary_blob_path = f"{course_id}/section_summaries/{section_id}.md"
 
-            logger.info(f"📤 Saving section summary to blob: {summary_blob_path}")
+            logger.info(f"Saving section summary to blob: {summary_blob_path}")
 
             success = blob_manager.upload_text_to_blob(
                 text_content=section_summary,
@@ -675,14 +675,14 @@ class ContentSummarizer:
             )
 
             if success:
-                logger.info(f"✅ Section summary saved to blob: {summary_blob_path}")
+                logger.info(f"Section summary saved to blob: {summary_blob_path}")
                 return summary_blob_path
             else:
-                logger.info(f"❌ Failed to save section summary to blob")
+                logger.info(f" Failed to save section summary to blob")
                 return None
 
         except Exception as e:
-            logger.info(f"❌ Error in section summarization: {str(e)}")
+            logger.info(f"Error in section summarization: {str(e)}")
             return None
 
 
@@ -700,14 +700,14 @@ class ContentSummarizer:
             path_parts = full_blob_path.split('/')
 
             if len(path_parts) < 2:
-                logger.info(f"❌ Invalid path: {full_blob_path}. Should be in format: CourseID/section_summaries")
+                logger.info(f" Invalid path: {full_blob_path}. Should be in format: CourseID/section_summaries")
                 return None
 
             course_id = path_parts[0]  # CS101
             # path_parts[1] should be section_summaries
 
-            logger.info(f"📁 CourseID: {course_id}")
-            logger.info(f"📂 section_summaries path: {full_blob_path}")
+            logger.info(f" CourseID: {course_id}")
+            logger.info(f" section_summaries path: {full_blob_path}")
 
             # Create BlobManager with default container
             blob_manager = BlobManager()
@@ -719,10 +719,10 @@ class ContentSummarizer:
             sections_files = [f for f in all_files if f.startswith(full_blob_path + "/") and f.endswith(".md")]
 
             if not sections_files:
-                logger.info(f"❌ No section summary files found in {full_blob_path}")
+                logger.info(f" No section summary files found in {full_blob_path}")
                 return None
 
-            logger.info(f"📁 Found {len(sections_files)} section summary files:")
+            logger.info(f" Found {len(sections_files)} section summary files:")
             for file in sections_files:
                 logger.info(f"  - {file}")
 
@@ -731,7 +731,7 @@ class ContentSummarizer:
             successful_files = []
 
             for file_path in sections_files:
-                logger.info(f"\n📥 Downloading file to memory: {file_path}")
+                logger.info(f"\n Downloading file to memory: {file_path}")
 
                 try:
                     # Download file directly to memory
@@ -747,25 +747,25 @@ class ContentSummarizer:
                             all_content += f"{'=' * 50}\n\n"
                             all_content += file_content
                             successful_files.append(file_path)
-                            logger.info(f"✅ File read successfully: {len(file_content)} characters")
+                            logger.info(f" File read successfully: {len(file_content)} characters")
                         else:
-                            logger.info(f"⚠️ Empty file: {file_path}")
+                            logger.info(f" Empty file: {file_path}")
                     else:
-                        logger.info(f"❌ Failed to download file: {file_path}")
+                        logger.info(f" Failed to download file: {file_path}")
 
                 except Exception as e:
-                    logger.info(f"❌ Error processing file {file_path}: {e}")
+                    logger.info(f" Error processing file {file_path}: {e}")
                     continue
 
             if not successful_files:
-                logger.info(f"❌ Could not read any files from {full_blob_path}")
+                logger.info(f" Could not read any files from {full_blob_path}")
                 return None
 
-            logger.info(f"\n📊 Total working with {len(successful_files)} files")
-            logger.info(f"📊 Total content length: {len(all_content)} characters")
+            logger.info(f"\n Total working with {len(successful_files)} files")
+            logger.info(f" Total content length: {len(all_content)} characters")
 
             # Create summary
-            logger.info(f"\n🤖 Creating complete course summary...")
+            logger.info(f"\n Creating complete course summary...")
 
             # Prepare special prompt for course summary
             system_prompt = self._get_course_summary_prompt()
@@ -791,13 +791,13 @@ class ContentSummarizer:
 
             course_summary = response.choices[0].message.content
 
-            logger.info(f"✅ Course summary created successfully!")
-            logger.info(f"📊 Summary length: {len(course_summary)} characters")
+            logger.info(f"Course summary created successfully!")
+            logger.info(f" Summary length: {len(course_summary)} characters")
 
             # Save summary to blob in new structure: CourseID/course_summary.md
             summary_blob_path = f"{course_id}/course_summary.md"
 
-            logger.info(f"📤 Saving course summary to blob: {summary_blob_path}")
+            logger.info(f" Saving course summary to blob: {summary_blob_path}")
 
             success = blob_manager.upload_text_to_blob(
                 text_content=course_summary,
@@ -805,14 +805,14 @@ class ContentSummarizer:
             )
 
             if success:
-                logger.info(f"✅ Course summary saved to blob: {summary_blob_path}")
+                logger.info(f" Course summary saved to blob: {summary_blob_path}")
                 return summary_blob_path
             else:
-                logger.info(f"❌ Failed to save course summary to blob")
+                logger.info(f" Failed to save course summary to blob")
                 return None
 
         except Exception as e:
-            logger.info(f"❌ Error in course summarization: {str(e)}")
+            logger.info(f" Error in course summarization: {str(e)}")
             return None
 
     def save_summary_to_file(self, summary: str, original_file_path: str, output_dir: str = "summaries") -> str:
@@ -840,23 +840,23 @@ class ContentSummarizer:
             with open(summary_path, 'w', encoding='utf-8') as f:
                 f.write(summary)
 
-            logger.info(f"✅ Summary saved to: {summary_path}")
+            logger.info(f" Summary saved to: {summary_path}")
             return summary_path
 
         except Exception as e:
             error_msg = f"Error saving summary: {str(e)}"
-            logger.info(f"❌ {error_msg}")
+            logger.info(f" {error_msg}")
             return ""
 
 
 async def main():
     """Main function for testing"""
-    logger.info("📝 Content Summarizer - Testing")
+    logger.info("Content Summarizer - Testing")
     logger.info("=" * 50)
 
     summarizer = ContentSummarizer()
 
-    # logger.info("\n🔄 Testing summarize_md_file with blob paths...")
+    # logger.info("\n Testing summarize_md_file with blob paths...")
     #
     # test_blob_paths = [
     #     "CS101/Section1/Videos_md/2.md",
@@ -868,21 +868,21 @@ async def main():
     #
     # for blob_path in test_blob_paths:
     #     logger.info(f"\n{'=' * 50}")
-    #     logger.info(f"🔄 Testing blob: {blob_path}")
+    #     logger.info(f" Testing blob: {blob_path}")
     #     logger.info(f"{'=' * 50}")
     #
     #     try:
     #         # בדיקה אם הקובץ קיים בבלוב
-    #         logger.info(f"📋 Checking if blob exists...")
+    #         logger.info(f" Checking if blob exists...")
     #
     #         # יצירת סיכום מהבלוב
     #         summary = summarizer.summarize_md_file(blob_path)
     #
     #         if summary and not summary.startswith("שגיאה") and not summary.startswith(
     #                 "לא ניתן") and not summary.startswith("נכשל"):
-    #             logger.info(f"✅ Summary created successfully!")
-    #             logger.info(f"📊 Summary length: {len(summary)} characters")
-    #             logger.info(f"📋 Summary preview (first 300 chars):")
+    #             logger.info(f" Summary created successfully!")
+    #             logger.info(f"Summary length: {len(summary)} characters")
+    #             logger.info(f"Summary preview (first 300 chars):")
     #             logger.info("-" * 40)
     #             logger.info(summary[:300] + "..." if len(summary) > 300 else summary)
     #             logger.info("-" * 40)
@@ -890,73 +890,73 @@ async def main():
     #             # שמירת הסיכום לקובץ מקומי
     #             summary_file = summarizer.save_summary_to_file(summary, blob_path, "summaries")
     #             if summary_file:
-    #                 logger.info(f"💾 Summary saved to: {summary_file}")
+    #                 logger.info(f" Summary saved to: {summary_file}")
     #
     #             successful_tests += 1
     #
     #         else:
-    #             logger.info(f"❌ Failed to create summary: {summary}")
+    #             logger.info(f"Failed to create summary: {summary}")
     #             failed_tests += 1
     #
     #     except Exception as e:
-    #         logger.info(f"❌ Error processing blob {blob_path}: {str(e)}")
+    #         logger.info(f" Error processing blob {blob_path}: {str(e)}")
     #         failed_tests += 1
     #
-    #     logger.info(f"\n⏱️ Waiting 2 seconds before next test...")
+    #     logger.info(f"\n Waiting 2 seconds before next test...")
     #     import time
     #     time.sleep(2)
 
 
     # # בדיקת הפונקציה summarize_section_from_blob
-    # logger.info("\n🔄 Testing summarize_section_from_blob...")
+    # logger.info("\n Testing summarize_section_from_blob...")
     #
     # # נתיב מלא בבלוב
     # full_blob_path = "CS101/Section1/file_summaries"
     #
     #
-    # logger.info(f"📂 Testing full blob path: {full_blob_path}")
+    # logger.info(f"Testing full blob path: {full_blob_path}")
     #
     # try:
     #     # יצירת סיכום section
     #     result = summarizer.summarize_section_from_blob(full_blob_path)
     #
     #     if result:
-    #         logger.info(f"\n✅ Section summary created successfully!")
-    #         logger.info(f"📤 Summary saved to blob: {result}")
-    #         logger.info(f"🎉 Test completed successfully!")
+    #         logger.info(f"\nSection summary created successfully!")
+    #         logger.info(f" Summary saved to blob: {result}")
+    #         logger.info(f"Test completed successfully!")
     #     else:
-    #         logger.info(f"\n❌ Failed to create section summary")
-    #         logger.info(f"💡 Check if there are summary files in {full_blob_path}")
+    #         logger.info(f"\nFailed to create section summary")
+    #         logger.info(f" Check if there are summary files in {full_blob_path}")
     #
     # except Exception as e:
-    #     logger.info(f"\n❌ Error during section summarization: {str(e)}")
+    #     logger.info(f"\nError during section summarization: {str(e)}")
     #     traceback.logger.info_exc()
 
     # Test summarize_course_from_blob function
-    logger.info("\n🔄 Testing summarize_course_from_blob...")
+    logger.info("\n Testing summarize_course_from_blob...")
 
     # Full path to section summaries folder
     full_blob_path = "Discrete_mathematics/section_summaries"
 
-    logger.info(f"📂 Testing course summary from path: {full_blob_path}")
+    logger.info(f"Testing course summary from path: {full_blob_path}")
 
     try:
         # Create complete course summary
         result = await summarizer.summarize_course_from_blob(full_blob_path)
 
         if result:
-            logger.info(f"\n✅ Course summary created successfully!")
-            logger.info(f"📤 Summary saved to blob: {result}")
-            logger.info(f"🎉 Test completed successfully!")
+            logger.info(f"\n Course summary created successfully!")
+            logger.info(f"Summary saved to blob: {result}")
+            logger.info(f"Test completed successfully!")
         else:
-            logger.info(f"\n❌ Failed to create course summary")
-            logger.info(f"💡 Check if there are section summary files in {full_blob_path}")
+            logger.info(f"\n Failed to create course summary")
+            logger.info(f"Check if there are section summary files in {full_blob_path}")
 
     except Exception as e:
-        logger.info(f"\n❌ Error during course summarization: {str(e)}")
+        logger.info(f"\n Error during course summarization: {str(e)}")
         traceback.logger.info_exc()
 
-    logger.info(f"\n🎉 Testing completed!")
+    logger.info(f"\n Testing completed!")
 
 
 if __name__ == "__main__":

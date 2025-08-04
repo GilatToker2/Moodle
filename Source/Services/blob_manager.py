@@ -68,17 +68,17 @@ class BlobManager:
             container_client = self.blob_service.get_container_client(self.container_name)
             blob_client = container_client.get_blob_client(blob_name)
 
-            logger.info(f"📥 Downloading file: {blob_name} -> {local_file_path}")
+            logger.info(f"Downloading file: {blob_name} -> {local_file_path}")
 
             with open(local_file_path, 'wb') as file_data:
                 download_stream = blob_client.download_blob()
                 file_data.write(download_stream.readall())
 
-            logger.info(f"✅ File downloaded successfully: {local_file_path}")
+            logger.info(f"File downloaded successfully: {local_file_path}")
             return True
 
         except Exception as e:
-            logger.info(f"❌ Error downloading file {blob_name}: {e}")
+            logger.info(f"Error downloading file {blob_name}: {e}")
             return False
 
     def list_files(self, folder: Optional[str] = None) -> List[str]:
@@ -106,7 +106,7 @@ class BlobManager:
             return blob_list
 
         except Exception as e:
-            logger.info(f"❌ Error listing files: {e}")
+            logger.info(f"Error listing files: {e}")
             return []
 
     # def download_folder_files(self, blob_folder_path: str, local_temp_dir: str) -> List[str]:
@@ -183,11 +183,11 @@ class BlobManager:
             # Create full URL
             blob_url = f"{self.blob_service.primary_endpoint}{self.container_name}/{blob_name}?{sas_token}"
 
-            logger.info(f"🔗 Generated SAS URL for file: {blob_name} (valid for {hours} hours)")
+            logger.info(f"Generated SAS URL for file: {blob_name} (valid for {hours} hours)")
             return blob_url
 
         except Exception as e:
-            logger.info(f"❌ Error generating SAS URL for {blob_name}: {e}")
+            logger.info(f"Error generating SAS URL for {blob_name}: {e}")
             return ""
 
     def download_to_memory(self, blob_name: str) -> Optional[bytes]:
@@ -204,16 +204,16 @@ class BlobManager:
             container_client = self.blob_service.get_container_client(self.container_name)
             blob_client = container_client.get_blob_client(blob_name)
 
-            logger.info(f"📥 Downloading file to memory: {blob_name}")
+            logger.info(f"Downloading file to memory: {blob_name}")
 
             download_stream = blob_client.download_blob()
             file_bytes = download_stream.readall()
 
-            logger.info(f"✅ File downloaded successfully to memory: {blob_name} ({len(file_bytes)} bytes)")
+            logger.info(f"File downloaded successfully to memory: {blob_name} ({len(file_bytes)} bytes)")
             return file_bytes
 
         except Exception as e:
-            logger.info(f"❌ Error downloading file to memory {blob_name}: {e}")
+            logger.info(f"Error downloading file to memory {blob_name}: {e}")
             return None
 
     def upload_text_to_blob(self, text_content: str, blob_name: str, container: str = None) -> bool:
@@ -237,7 +237,7 @@ class BlobManager:
 
             container_client = self.blob_service.get_container_client(target_container)
 
-            logger.info(f"📤 Uploading text to blob: {target_container}/{blob_name}")
+            logger.info(f"Uploading text to blob: {target_container}/{blob_name}")
 
             # Direct text upload
             container_client.upload_blob(
@@ -247,29 +247,29 @@ class BlobManager:
                 content_settings=ContentSettings(content_type=content_type)
             )
 
-            logger.info(f"✅ Text uploaded successfully: {target_container}/{blob_name}")
+            logger.info(f"Text uploaded successfully: {target_container}/{blob_name}")
             return True
 
         except Exception as e:
-            logger.info(f"❌ Error uploading text to blob: {e}")
+            logger.info(f"Error uploading text to blob: {e}")
             return False
 
 if __name__ == "__main__":
     # Test the blob manager with your specific container structure
-    logger.info("🧪 Testing Blob Manager - Course Container")
+    logger.info("Testing Blob Manager - Course Container")
     logger.info("=" * 50)
 
     try:
         blob_manager = BlobManager()
 
         # Check Section1 folder specifically
-        logger.info("\n📁 Files in 'Section1' folder:")
+        logger.info("\nFiles in 'Section1' folder:")
         section1_blobs = blob_manager.list_files("Section1")
         logger.info(f"Found {len(section1_blobs)} files in Section1:")
         for blob in section1_blobs:
             logger.info(f"  - {blob}")
 
-        logger.info("\n📁 All files in container:")
+        logger.info("\nAll files in container:")
         all_blobs = blob_manager.list_files()
         logger.info(f"Total found {len(all_blobs)} files:")
         for blob in all_blobs[:10]:  # Show first 10
@@ -278,7 +278,7 @@ if __name__ == "__main__":
             logger.info(f"  ... and {len(all_blobs) - 10} more files")
 
         # Test uploading a file to Section1
-        logger.info("\n📤 Testing file upload to Section1 folder:")
+        logger.info("\nTesting file upload to Section1 folder:")
 
         # Create a test file
         test_file_path = "test_upload.txt"
@@ -289,10 +289,10 @@ if __name__ == "__main__":
         success = blob_manager.upload_file(test_file_path, "test_file.txt", "Section1")
 
         if success:
-            logger.info("✅ File uploaded successfully!")
+            logger.info("File uploaded successfully!")
 
             # List files again to see the new file
-            logger.info("\n📁 Files in Section1 after upload:")
+            logger.info("\nFiles in Section1 after upload:")
             updated_blobs = blob_manager.list_files("Section1")
             for blob in updated_blobs:
                 logger.info(f"  - {blob}")
@@ -301,8 +301,8 @@ if __name__ == "__main__":
         if os.path.exists(test_file_path):
             os.remove(test_file_path)
 
-        logger.info("\n✅ Blob manager test completed!")
+        logger.info("\nBlob manager test completed!")
 
     except Exception as e:
-        logger.info(f"❌ Failed to test blob manager: {e}")
+        logger.info(f"Failed to test blob manager: {e}")
         traceback.logger.info_exc()

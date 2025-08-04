@@ -1,9 +1,9 @@
 """
-🎓 Academic Content Processing API
+Academic Content Processing API
 
-📖 API Documentation: http://localhost:8080/docs
+API Documentation: http://localhost:8080/docs
 
-🔑 Required config.py settings:
+Required config.py settings:
 - STORAGE_CONNECTION_STRING
 - CONTAINER_NAME ("course")
 - AZURE_OPENAI_API_KEY
@@ -49,7 +49,7 @@ summarizer = ContentSummarizer()
 video_processor = VideoIndexerManager()
 
 # ================================
-# 📋 RESPONSE MODELS
+# RESPONSE MODELS
 # ================================
 
 class ErrorResponse(BaseModel):
@@ -118,25 +118,25 @@ class DetectSubjectResponse(BaseModel):
     subject_type: str
 
 # ================================
-# 🏠 ROOT & HEALTH ENDPOINTS
+# ROOT & HEALTH ENDPOINTS
 # ================================
 
 @app.get("/", tags=["System"])
 async def root():
     """Home page - General system information"""
     return {
-        "message": "🎓 Academic Content Processing System",
+        "message": "Academic Content Processing System",
         "version": "1.0.0",
         "status": "Active",
         "functions": [
-            "📄 /process/document - Convert documents to Markdown",
-            "🎥 /process/video - Process videos with transcription",
-            "🗂️ /insert_to_index - Insert files to search index",
-            "🗑️ /delete_from_index - Delete content from search index",
-            "📝 /summarize/md - Create summary from Markdown",
-            "📚 /summarize/section - Create section summary",
-            "🎓 /summarize/course - Create course summary",
-            "🔍 /detect/subject - Detect subject type from course"
+            "/process/document - Convert documents to Markdown",
+            "/process/video - Process videos with transcription",
+            "/insert_to_index - Insert files to search index",
+            "/delete_from_index - Delete content from search index",
+            "/summarize/md - Create summary from Markdown",
+            "/summarize/section - Create section summary",
+            "/summarize/course - Create course summary",
+            "/detect/subject - Detect subject type from course"
         ],
         "docs_url": "/docs"
     }
@@ -153,7 +153,7 @@ async def root():
 )
 async def process_document_file(request: ProcessDocumentRequest):
     """
-    📄 Process Document to Markdown Format
+    Process Document to Markdown Format
 
     **Function Description:**
     Converts documents from blob storage to Markdown format using Azure Document AI.
@@ -225,7 +225,7 @@ async def process_document_file(request: ProcessDocumentRequest):
 )
 async def process_video_file(request: ProcessVideoRequest):
     """
-    🎥 Process Video File with Azure Video Indexer
+    Process Video File with Azure Video Indexer
 
     **Function Description:**
     Processes video from blob storage using Azure Video Indexer for transcription and analysis, then converts to Markdown format.
@@ -257,9 +257,10 @@ async def process_video_file(request: ProcessVideoRequest):
     - blob_path: Path to the created markdown file in blob storage (or None if failed)
     """
     try:
-        logger.info(f"🎥 Starting video processing: {request.video_name}")
-        logger.info(f"📍 CourseID: {request.course_id}, SectionID: {request.section_id}, FileID: {request.file_id}")
-        logger.debug(f"🔗 VideoURL: {request.video_url}")
+        logger.info(f"Starting video processing: {request.video_name}")
+        logger.info(f"CourseID: {request.course_id}, SectionID: {request.section_id}, FileID: {request.file_id}")
+        logger.debug(f"VideoURL: {request.video_url}")
+
 
         # Validate input parameters
         if not request.course_id or not request.section_id:
@@ -282,14 +283,14 @@ async def process_video_file(request: ProcessVideoRequest):
         )
 
         if result_blob_path:
-            logger.info(f"✅ Video processing started successfully, target path: {result_blob_path}")
-            logger.info(f"🚀 Processing continues in background")
+            logger.info(f"Video processing started successfully, target path: {result_blob_path}")
+            logger.info(f"Processing continues in background")
             return ProcessVideoResponse(
                 success=True,
                 blob_path=result_blob_path
             )
         else:
-            logger.error("❌ Video processing failed to start")
+            logger.error("Video processing failed to start")
             return ProcessVideoResponse(
                 success=False,
                 blob_path=None
@@ -299,11 +300,11 @@ async def process_video_file(request: ProcessVideoRequest):
         # Re-raise HTTP exceptions (like validation errors)
         raise
     except Exception as e:
-        logger.error(f"❌ Error in video processing: {str(e)}", exc_info=True)
+        logger.error(f"Error in video processing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
 
 # ================================
-# 🗂️ INDEXING ENDPOINTS
+# INDEXING ENDPOINTS
 # ================================
 
 @app.post(
@@ -317,7 +318,7 @@ async def process_video_file(request: ProcessVideoRequest):
 )
 async def insert_to_index(request: IndexRequest):
     """
-    🗂️ Index MD Files from Blob Storage to Search Index
+    Index MD Files from Blob Storage to Search Index
 
     **Function Description:**
     Indexes multiple Markdown files from blob storage into Azure Cognitive Search for searchability.
@@ -386,7 +387,7 @@ async def insert_to_index(request: IndexRequest):
 )
 async def delete_from_index(request: DeleteContentRequest):
     """
-    🗑️ Delete Content from Search Index by Source ID
+    Delete Content from Search Index by Source ID
 
     **Function Description:**
     Removes all chunks related to a specific source (video or document) from the search index.
@@ -467,7 +468,7 @@ async def delete_from_index(request: DeleteContentRequest):
 )
 async def summarize_md_file(request: SummarizeRequest):
     """
-    📝 Create Summary from Markdown File in Blob Storage
+    Create Summary from Markdown File in Blob Storage
 
     **Function Description:**
     Generates an LLM-based summary from a Markdown file stored in blob storage.
@@ -534,7 +535,7 @@ async def summarize_md_file(request: SummarizeRequest):
 )
 async def summarize_section_from_blob(request: SummarizeSectionRequest):
     """
-    📚 Create Section Summary from Azure Storage
+    Create Section Summary from Azure Storage
 
     **Function Description:**
     Scans all summary files in the specified blob path and creates a unified section summary.
@@ -589,7 +590,7 @@ async def summarize_section_from_blob(request: SummarizeSectionRequest):
 )
 async def summarize_course_from_blob(request: SummarizeCourseRequest):
     """
-    🎓 Create Complete Course Summary from Azure Storage
+    Create Complete Course Summary from Azure Storage
 
     **Function Description:**
     Analyzes all section summary files in the specified blob path and generates a comprehensive course-level summary.
@@ -648,7 +649,7 @@ async def summarize_course_from_blob(request: SummarizeCourseRequest):
 )
 async def detect_subject_type(request: DetectSubjectRequest):
     """
-    🔍 Detect Subject Type from Course Content
+    Detect Subject Type from Course Content
 
     **Function Description:**
     Analyzes course content (videos and documents) to automatically determine if the subject is mathematical/technical or humanities-based.
@@ -675,7 +676,7 @@ async def detect_subject_type(request: DetectSubjectRequest):
     - subject_type: Detected subject type ("מתמטי", "הומני", or "לא זוהה")
     """
     try:
-        logger.info(f"🎯 Starting subject type detection for course: {request.course_path}")
+        logger.info(f"Starting subject type detection for course: {request.course_path}")
 
         # Call the subject detection function
         subject_type = detect_subject_from_course(
@@ -700,7 +701,7 @@ async def detect_subject_type(request: DetectSubjectRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.info(f"❌ Error in subject type detection: {e}")
+        logger.info(f"Error in subject type detection: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Error detecting subject type: {str(e)}"
@@ -711,10 +712,10 @@ async def detect_subject_type(request: DetectSubjectRequest):
 # ================================
 
 if __name__ == "__main__":
-    logger.info("🚀 Starting FastAPI ttttserver...")
-    logger.info("📖 API documentation available at: http://localhost:8080/docs")
-    logger.info("🏠 Home page: http://localhost:8080/")
-    logger.info("⏹️ Stop server: Ctrl+C")
+    logger.info("Starting FastAPI server...")
+    logger.info("API documentation available at: http://localhost:8080/docs")
+    logger.info("Home page: http://localhost:8080/")
+    logger.info("Stop server: Ctrl+C")
 
     uvicorn.run(
         "main:app",
