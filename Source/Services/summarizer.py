@@ -4,9 +4,10 @@ Uses Azure OpenAI language model to create customized summaries
 """
 
 import os
+import asyncio
 import traceback
 from typing import Dict
-from openai import AzureOpenAI
+from openai import AsyncAzureOpenAI
 from Config.config import (
     AZURE_OPENAI_API_KEY,
     AZURE_OPENAI_ENDPOINT,
@@ -32,8 +33,8 @@ class ContentSummarizer:
         """
         self.model_name = AZURE_OPENAI_CHAT_COMPLETION_MODEL
 
-        # Create OpenAI client
-        self.openai_client = AzureOpenAI(
+        # Create async OpenAI client
+        self.openai_client = AsyncAzureOpenAI(
             api_key=AZURE_OPENAI_API_KEY,
             api_version=AZURE_OPENAI_API_VERSION,
             azure_endpoint=AZURE_OPENAI_ENDPOINT
@@ -331,7 +332,7 @@ class ContentSummarizer:
         }
 
 
-    def summarize_content(self, content: str, content_type: str = "document", subject_type: str = None, existing_summary: str = None) -> str:
+    async def summarize_content(self, content: str, content_type: str = "document", subject_type: str = None, existing_summary: str = None) -> str:
         """
         Create summary for content
 
@@ -373,7 +374,7 @@ class ContentSummarizer:
 
             # Call language model
             logger.info(f"🤖 Calling {self.model_name} for summarization...")
-            response = self.openai_client.chat.completions.create(
+            response = await self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 temperature=0.3,  # Stability in summarization
@@ -417,7 +418,7 @@ class ContentSummarizer:
                 return part
         return "general"  # Default if no section found
 
-    def summarize_md_file(self, blob_path: str) -> str | None:
+    async def summarize_md_file(self, blob_path: str) -> str | None:
         """
         Summarize MD file from blob with automatic content type detection and save to blob
 
@@ -459,7 +460,7 @@ class ContentSummarizer:
                         return None
 
                     # Create summary with parsed parameters
-                    summary = self.summarize_content(
+                    summary = await self.summarize_content(
                         content=parsed_data["full_transcript"],
                         content_type="video",
                         subject_type=parsed_data.get("subject_type"),
@@ -478,7 +479,7 @@ class ContentSummarizer:
                         return None
 
                     # Create summary
-                    summary = self.summarize_content(content, content_type)
+                    summary = await self.summarize_content(content, content_type)
 
                 # Check that summary was created successfully
                 if not summary or summary.startswith("Error"):
@@ -553,7 +554,7 @@ class ContentSummarizer:
             logger.info(f"❌ Error saving summary to blob: {str(e)}")
             return None
 
-    def summarize_section_from_blob(self, full_blob_path: str) -> str | None:
+    async def summarize_section_from_blob(self, full_blob_path: str) -> str | None:
         """
         Summarize complete section from all summary files in blob storage
         Args:
@@ -651,7 +652,7 @@ class ContentSummarizer:
             ]
 
             # Call language model
-            response = self.openai_client.chat.completions.create(
+            response = await self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 temperature=0.3,
@@ -685,7 +686,7 @@ class ContentSummarizer:
             return None
 
 
-    def summarize_course_from_blob(self, full_blob_path: str) -> str | None:
+    async def summarize_course_from_blob(self, full_blob_path: str) -> str | None:
         """
         Summarize complete course from all section summary files in blob storage
         Args:
@@ -781,7 +782,7 @@ class ContentSummarizer:
             ]
 
             # Call language model
-            response = self.openai_client.chat.completions.create(
+            response = await self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 temperature=0.3,
@@ -848,7 +849,7 @@ class ContentSummarizer:
             return ""
 
 
-def main():
+async def main():
     """Main function for testing"""
     logger.info("📝 Content Summarizer - Testing")
     logger.info("=" * 50)
@@ -941,7 +942,7 @@ def main():
 
     try:
         # Create complete course summary
-        result = summarizer.summarize_course_from_blob(full_blob_path)
+        result = await summarizer.summarize_course_from_blob(full_blob_path)
 
         if result:
             logger.info(f"\n✅ Course summary created successfully!")
@@ -959,5 +960,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-
+    asyncio.run(main())

@@ -8,7 +8,7 @@ Core workflow:
 3. Generate embeddings for chunks
 4. Push chunks to unified Azure AI Search index with flexible schema
 """
-
+import asyncio
 import uuid
 import tiktoken
 import re
@@ -21,7 +21,7 @@ from azure.search.documents.indexes.models import (
     VectorSearch, VectorSearchProfile,
     SearchField, SemanticConfiguration, SemanticPrioritizedFields, SemanticField, SemanticSearch
 )
-from openai import AzureOpenAI
+from openai import AsyncAzureOpenAI
 from azure.search.documents.indexes.models import HnswAlgorithmConfiguration
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
@@ -47,8 +47,8 @@ class UnifiedContentIndexer:
         self.index_client = SearchIndexClient(self.search_endpoint, self.credential)
         self.index_name = INDEX_NAME
 
-        # Configure OpenAI client
-        self.openai_client = AzureOpenAI(
+        # Configure async OpenAI client
+        self.openai_client = AsyncAzureOpenAI(
             api_key=AZURE_OPENAI_API_KEY,
             api_version="2023-05-15",
             azure_endpoint=AZURE_OPENAI_ENDPOINT
@@ -201,7 +201,7 @@ class UnifiedContentIndexer:
             logger.info(f"❌ Error creating unified index: {e}")
             return False
 
-    def embed_texts_batch(self, texts: List[str], batch_size: int = 16) -> List[List[float]]:
+    async def embed_texts_batch(self, texts: List[str], batch_size: int = 16) -> List[List[float]]:
         """Generate embeddings in batches"""
         embeddings = []
 
@@ -210,7 +210,7 @@ class UnifiedContentIndexer:
             logger.info(f"  🔄 Embedding batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
 
             try:
-                response = self.openai_client.embeddings.create(
+                response = await self.openai_client.embeddings.create(
                     model=AZURE_OPENAI_EMBEDDING_MODEL,
                     input=batch
                 )
@@ -887,7 +887,7 @@ def parse_document_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Di
     return document_data
 
 
-def index_content_files(blob_paths: List[str], create_new_index: bool = False) -> str:
+async def index_content_files(blob_paths: List[str], create_new_index: bool = False) -> str:
     """
     Index MD files from blob storage to unified index.
     Automatically detects file type (video/document) by path.
@@ -939,7 +939,7 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                     continue
 
                 # Generate embeddings
-                embeddings = indexer.embed_texts_batch(texts)
+                embeddings = await indexer.embed_texts_batch(texts)
 
                 # Extract course_id from blob path (e.g., "CS101/Section1/Videos_md/2.md" -> "CS101")
                 course_id = blob_path.split('/')[0] if '/' in blob_path else "unknown"
@@ -1010,7 +1010,7 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
                     continue
 
                 # Generate embeddings
-                embeddings = indexer.embed_texts_batch(texts)
+                embeddings = await indexer.embed_texts_batch(texts)
 
                 # Extract course_id from blob path (e.g., "CS101/Section1/Docs_md/1.md" -> "CS101")
                 course_id = blob_path.split('/')[0] if '/' in blob_path else "unknown"
@@ -1097,7 +1097,7 @@ def index_content_files(blob_paths: List[str], create_new_index: bool = False) -
         return "⚠️ No documents found for upload (all files might have been empty)."
 
 
-def main():
+async def main():
     """Main function - demonstrates usage with automatic type detection and new functions"""
     logger.info("🚀 Unified Content Indexer - Videos + Documents")
     logger.info("=" * 60)
@@ -1106,11 +1106,10 @@ def main():
 
     # Define blob paths to process - type will be auto-detected from path
     blob_paths = [
-        "CS101/Section1/Docs_md/1.md",
-        # "CS101/Section1/Videos_md/2.md"
+        "Discrete_mathematics/Section1/Docs_md/2001.md"
     ]
 
-    result = index_content_files(blob_paths, create_new_index=True)
+    result = await index_content_files(blob_paths, create_new_index=True)
     logger.info("debug")
     logger.info(f"\n{result}")
 
@@ -1175,5 +1174,4 @@ def main():
 
 if __name__ == "__main__":
     logger.info("running")
-    main()
-
+    asyncio.run(main())

@@ -1,18 +1,21 @@
 import os
+import asyncio
 from io import BytesIO
 from azure.core.credentials import AzureKeyCredential
-from azure.ai.documentintelligence import DocumentIntelligenceClient
+from azure.ai.documentintelligence.aio import DocumentIntelligenceClient
 from Source.Services.blob_manager import BlobManager
 from Config.config import AZURE_FORM_RECOGNIZER_KEY, AZURE_FORM_RECOGNIZER_ENDPOINT
 from Config.logging_config import setup_logging
 logger = setup_logging()
+
+# Use async client
 client = DocumentIntelligenceClient(
     endpoint=AZURE_FORM_RECOGNIZER_ENDPOINT,
     credential=AzureKeyCredential(AZURE_FORM_RECOGNIZER_KEY)
 )
 
 
-def process_single_document(file_path: str) -> str | None:
+async def process_single_document(file_path: str) -> str | None:
     """
     Accepts *any* document path (.doc, .docx, .pdf, .pptx, .png, …)
     and returns a Markdown string (or None if it failed).
@@ -26,23 +29,24 @@ def process_single_document(file_path: str) -> str | None:
 
     try:
         # use Azure Document Intelligence
-        with open(work_path, "rb") as f:
-            poller = client.begin_analyze_document(
-                "prebuilt-layout",
-                f,
-                content_type=None,  # let the service detect type
-                output_content_format="markdown"
-            )
-        result = poller.result()
-        md = result.content
-        return md
+        async with client:
+            with open(work_path, "rb") as f:
+                poller = await client.begin_analyze_document(
+                    "prebuilt-layout",
+                    f,
+                    content_type=None,  # let the service detect type
+                    output_content_format="markdown"
+                )
+            result = await poller.result()
+            md = result.content
+            return md
 
     except Exception as e:
         logger.info(f"❌ Error in Azure DI for {work_path}: {e}")
         return None
 
 
-def process_document_from_memory(file_bytes: bytes) -> str | None:
+async def process_document_from_memory(file_bytes: bytes) -> str | None:
     """
     Processes document bytes directly using Azure Document Intelligence.
 
@@ -59,22 +63,23 @@ def process_document_from_memory(file_bytes: bytes) -> str | None:
         file_buffer = BytesIO(file_bytes)
 
         # Use Azure Document Intelligence directly with the buffer
-        poller = client.begin_analyze_document(
-            "prebuilt-layout",
-            file_buffer,
-            content_type=None,  # let the service detect type
-            output_content_format="markdown"
-        )
-        result = poller.result()
-        md = result.content
-        return md
+        async with client:
+            poller = await client.begin_analyze_document(
+                "prebuilt-layout",
+                file_buffer,
+                content_type=None,  # let the service detect type
+                output_content_format="markdown"
+            )
+            result = await poller.result()
+            md = result.content
+            return md
 
     except Exception as e:
         logger.info(f"❌ Error in Azure DI for memory buffer: {e}")
         return None
 
 
-def document_to_markdown(course_id: str, section_id: str, file_id: int, document_name: str, document_url: str) -> str | None:
+async def document_to_markdown(course_id: str, section_id: str, file_id: int, document_name: str, document_url: str) -> str | None:
     """
     Streamlined: Downloads document from blob → processes in memory → uploads markdown.
     No temp files or disk I/O.
@@ -112,7 +117,7 @@ def document_to_markdown(course_id: str, section_id: str, file_id: int, document
     logger.info(f"🔄 Processing file in memory: {document_name}")
 
     # Step 2: Process document directly from memory
-    md_content = process_document_from_memory(file_bytes)
+    md_content = await process_document_from_memory(file_bytes)
     if not md_content:
         logger.info(f"❌ Failed to process file: {document_name}")
         return None
@@ -139,7 +144,8 @@ def document_to_markdown(course_id: str, section_id: str, file_id: int, document
         return None
 
 
-if __name__ == "__main__":
+
+async def main():
     # Process a single document from blob storage with new parameters
     course_id = "CS101"
     section_id = "Section1"
@@ -153,10 +159,14 @@ if __name__ == "__main__":
     logger.info(f"📍 CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
     logger.info(f"🔗 DocumentURL: {document_url}")
 
-    # Process the document
-    result = document_to_markdown(course_id, section_id, file_id, document_name, document_url)
+    # Process the document (now with await)
+    result = await document_to_markdown(course_id, section_id, file_id, document_name, document_url)
 
     if result:
         logger.info(f"\n🎉 File processed successfully: {result}")
     else:
         logger.info(f"\n❌ Failed to process file: {document_name}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
