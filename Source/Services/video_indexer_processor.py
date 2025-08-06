@@ -489,30 +489,30 @@ class VideoIndexerManager:
         #     md_content.append(summary_text)
         #     md_content.append("")
 
-            # Description
-            if structured_data.get('description'):
-                md_content.append("## תיאור")
-                md_content.append(structured_data['description'])
-                md_content.append("")
-
-            # Full transcript
-            md_content.append("## טרנסקריפט מלא")
-            md_content.append(structured_data.get('full_transcript', 'Transcript not available'))
+        # Description
+        if structured_data.get('description'):
+            md_content.append("## תיאור")
+            md_content.append(structured_data['description'])
             md_content.append("")
 
-            # Transcript with timestamps
-            transcript_segments = structured_data.get('transcript_segments', [])
-            if transcript_segments:
-                md_content.append("## טרנסקריפט עם חותמות זמן")
+        # Full transcript
+        md_content.append("## טרנסקריפט מלא")
+        md_content.append(structured_data.get('full_transcript', 'Transcript not available'))
+        md_content.append("")
+
+        # Transcript with timestamps
+        transcript_segments = structured_data.get('transcript_segments', [])
+        if transcript_segments:
+            md_content.append("## טרנסקריפט עם חותמות זמן")
+            md_content.append("")
+
+            for segment in transcript_segments:
+                start_time = segment.get('start_time', '00:00:00')
+                text = segment.get('text', '')
+                md_content.append(f"**[{start_time}]** {text}")
                 md_content.append("")
 
-                for segment in transcript_segments:
-                    start_time = segment.get('start_time', '00:00:00')
-                    text = segment.get('text', '')
-                    md_content.append(f"**[{start_time}]** {text}")
-                    md_content.append("")
-
-            return "\n".join(md_content)
+        return "\n".join(md_content)
 
     async def process_video_to_md(self, course_id: str, section_id: str, file_id: int, video_name: str,
                                   video_url: str,
