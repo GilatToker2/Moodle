@@ -282,53 +282,53 @@ class VideoIndexerManager:
         logger.info(
             f"Merging segments: {len(segments)} -> {len(merged_segments)} (max {max_duration_seconds} seconds)")
         return merged_segments
-
-    def create_textual_summary(self, video_id: str, deployment_name: str = "gpt-4o") -> str:
-        """Create textual summary using GPT"""
-        url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Summaries/Textual"
-        params = self._get_params_with_token({
-            "deploymentName": deployment_name,
-            "length": "Long",
-            "style": "Formal",
-            "includedFrames": "All",
-            "addToEndOfSummaryInstructions": "כתוב סיכום מפורט של השיעור בעברית. הצג את החומר בסדר הכרונולוגי שבו נלמד. לכל נושא מרכזי, תן הגדרות ברורות למונחים חדשים והסבר את הנקודה המרכזית במשפט אחד. כתוב בטון פדגוגי כך שסטודנט יוכל לשלוט בחומר מהסיכום לבדו. סיים ברשימת פעולות קונקרטיות או המלצות לימוד לסטודנטים. בסוף הוסף שורה אחת עם מילה אחת בלבד: 'מתמטי' או 'הומני' כדי לסווג אם זה קורס מתמטי או הומני."
-        })
-
-        try:
-            resp = requests.post(url, params=params, timeout=30)
-            resp.raise_for_status()
-            summary_id = resp.json().get("id")
-            if not summary_id:
-                raise RuntimeError(f"Summary creation failed: {resp.text}")
-            logger.info(f"Summary created with ID: {summary_id}")
-            return summary_id
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 400:
-                logger.info(f"GPT summary creation failed (400 Bad Request)")
-                logger.info(f"Response: {e.response.text}")
-                raise RuntimeError(f"GPT summary not available: {e.response.text}")
-            else:
-                raise
-
-    async def get_textual_summary(self, video_id: str, summary_id: str) -> str:
-        """Get textual summary after it's ready (async)"""
-        url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Summaries/Textual/{summary_id}"
-
-        while True:
-            params = self._get_params_with_token()
-            resp = requests.get(url, params=params, timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
-            state = data.get("state")
-            if state == "Processed":
-                summary = data.get("summary", "")
-                logger.info(f"Summary ready. Length: {len(summary)} characters")
-                return summary
-            elif state == "Failed":
-                raise RuntimeError(f"Summary creation failed: {data}")
-            else:
-                logger.info(f"Summary state: {state} - waiting...")
-                await asyncio.sleep(10)
+    #
+    # def create_textual_summary(self, video_id: str, deployment_name: str = "gpt-4o") -> str:
+    #     """Create textual summary using GPT"""
+    #     url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Summaries/Textual"
+    #     params = self._get_params_with_token({
+    #         "deploymentName": deployment_name,
+    #         "length": "Long",
+    #         "style": "Formal",
+    #         "includedFrames": "All",
+    #         "addToEndOfSummaryInstructions": "כתוב סיכום מפורט של השיעור בעברית. הצג את החומר בסדר הכרונולוגי שבו נלמד. לכל נושא מרכזי, תן הגדרות ברורות למונחים חדשים והסבר את הנקודה המרכזית במשפט אחד. כתוב בטון פדגוגי כך שסטודנט יוכל לשלוט בחומר מהסיכום לבדו. סיים ברשימת פעולות קונקרטיות או המלצות לימוד לסטודנטים. בסוף הוסף שורה אחת עם מילה אחת בלבד: 'מתמטי' או 'הומני' כדי לסווג אם זה קורס מתמטי או הומני."
+    #     })
+    #
+    #     try:
+    #         resp = requests.post(url, params=params, timeout=30)
+    #         resp.raise_for_status()
+    #         summary_id = resp.json().get("id")
+    #         if not summary_id:
+    #             raise RuntimeError(f"Summary creation failed: {resp.text}")
+    #         logger.info(f"Summary created with ID: {summary_id}")
+    #         return summary_id
+    #     except requests.exceptions.HTTPError as e:
+    #         if e.response.status_code == 400:
+    #             logger.info(f"GPT summary creation failed (400 Bad Request)")
+    #             logger.info(f"Response: {e.response.text}")
+    #             raise RuntimeError(f"GPT summary not available: {e.response.text}")
+    #         else:
+    #             raise
+    #
+    # async def get_textual_summary(self, video_id: str, summary_id: str) -> str:
+    #     """Get textual summary after it's ready (async)"""
+    #     url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Summaries/Textual/{summary_id}"
+    #
+    #     while True:
+    #         params = self._get_params_with_token()
+    #         resp = requests.get(url, params=params, timeout=15)
+    #         resp.raise_for_status()
+    #         data = resp.json()
+    #         state = data.get("state")
+    #         if state == "Processed":
+    #             summary = data.get("summary", "")
+    #             logger.info(f"Summary ready. Length: {len(summary)} characters")
+    #             return summary
+    #         elif state == "Failed":
+    #             raise RuntimeError(f"Summary creation failed: {data}")
+    #         else:
+    #             logger.info(f"Summary state: {state} - waiting...")
+    #             await asyncio.sleep(10)
 
     def delete_video(self, video_id: str) -> bool:
         """Delete video from Video Indexer to clean up unnecessary containers"""
@@ -460,28 +460,28 @@ class VideoIndexerManager:
                 md_content.append(f"{i}. {ocr_text}")
             md_content.append("")
 
-        # Lesson summary
-        summary_text = structured_data.get('summary_text', '')
-        if summary_text:
-            # Extract subject type from summary
-            subject_type = "לא זוהה"
-            summary_lines = summary_text.strip().split('\n')
-            last_line = summary_lines[-1].strip() if summary_lines else ""
-
-            if last_line in ['מתמטי', 'הומני']:
-                subject_type = last_line
-                # Remove last line from summary
-                summary_text = '\n'.join(summary_lines[:-1]).strip()
-
-            # Add subject type
-            md_content.append(f"## סוג מקצוע")
-            md_content.append(subject_type)
-            md_content.append("")
-
-            # Add summary
-            md_content.append("## סיכום השיעור")
-            md_content.append(summary_text)
-            md_content.append("")
+        # # Lesson summary
+        # summary_text = structured_data.get('summary_text', '')
+        # if summary_text:
+        #     # Extract subject type from summary
+        #     subject_type = "לא זוהה"
+        #     summary_lines = summary_text.strip().split('\n')
+        #     last_line = summary_lines[-1].strip() if summary_lines else ""
+        #
+        #     if last_line in ['מתמטי', 'הומני']:
+        #         subject_type = last_line
+        #         # Remove last line from summary
+        #         summary_text = '\n'.join(summary_lines[:-1]).strip()
+        #
+        #     # Add subject type
+        #     md_content.append(f"## סוג מקצוע")
+        #     md_content.append(subject_type)
+        #     md_content.append("")
+        #
+        #     # Add summary
+        #     md_content.append("## סיכום השיעור")
+        #     md_content.append(summary_text)
+        #     md_content.append("")
 
         # Description
         if structured_data.get('description'):
@@ -585,15 +585,15 @@ class VideoIndexerManager:
             # Wait for indexing to complete
             index_data = await self.wait_for_indexing(video_id)
 
-            # Create GPT summary
-            logger.info("Creating GPT summary...")
-            summary_text = ""
-            try:
-                summary_id = self.create_textual_summary(video_id)
-                summary_text = await self.get_textual_summary(video_id, summary_id)
-                logger.info(f"Received summary with length: {len(summary_text)} characters")
-            except Exception as e:
-                logger.info(f"GPT summary creation failed, continuing without summary: {e}")
+            # # Create GPT summary
+            # logger.info("Creating GPT summary...")
+            # summary_text = ""
+            # try:
+            #     summary_id = self.create_textual_summary(video_id)
+            #     summary_text = await self.get_textual_summary(video_id, summary_id)
+            #     logger.info(f"Received summary with length: {len(summary_text)} characters")
+            # except Exception as e:
+            #     logger.info(f"GPT summary creation failed, continuing without summary: {e}")
 
             # Extract transcript
             transcript_segments = self.extract_transcript_with_timestamps(index_data)
@@ -614,8 +614,8 @@ class VideoIndexerManager:
                 "transcript_segments": transcript_segments,
                 "full_transcript": " ".join([seg["text"] for seg in transcript_segments]),
                 "segment_start_times": [seg["start_time"] for seg in transcript_segments],
-                "segment_start_seconds": [seg["start_seconds"] for seg in transcript_segments],
-                "summary_text": summary_text
+                "segment_start_seconds": [seg["start_seconds"] for seg in transcript_segments]
+                # "summary_text": summary_text
             }
 
             # Convert to markdown
@@ -649,11 +649,11 @@ class VideoIndexerManager:
 
 async def main():
     # Process video from blob storage with new parameters
-    course_id = "Information_systems"
+    course_id = "CS101"
     section_id = "Section1"
-    file_id = 101
+    file_id = 2
     video_name = "L1 - A "
-    video_url = "A-יסודות מערכות מידע - שעור (06-11-2024) - T.mp4"
+    video_url = "L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4"
 
     logger.info(f"Processing video: {video_name}")
     logger.info(f"CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
