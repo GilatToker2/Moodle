@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import uvicorn
+from contextlib import asynccontextmanager
 from Config.logging_config import setup_logging
 # Import modules
 from Source.Services.files_DocAI_processor import document_to_markdown
@@ -22,6 +23,7 @@ from Source.Services.summarizer import ContentSummarizer
 from Source.Services.video_indexer_processor import VideoIndexerManager
 from Source.Services.unified_indexer import index_content_files, UnifiedContentIndexer
 from Source.Services.subject_detector import detect_subject_from_course
+from Source.Services.blob_manager import BlobManager
 
 # Initialize logger
 logger = setup_logging()
@@ -31,10 +33,98 @@ def debug_log(message):
     """Write debug message using proper logging"""
     logger.debug(message)
 
+# Global variables to store service instances
+app_services = {}
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for FastAPI application
+    Manages startup and shutdown of Azure services and connections
+    """
+    # STARTUP - Initialize services and connections
+    logger.info("App is starting - Initializing services...")
 
-# Initialize FastAPI app
-app = FastAPI(title="Academic Content API", version="1.0.0")
+    try:
+        # Initialize Azure Blob Storage Manager
+        logger.info("Initializing Azure Blob Storage Manager...")
+        blob_manager = BlobManager()
+        app_services["blob_manager"] = blob_manager
+        logger.info("Blob Storage Manager initialized successfully")
+
+        # Initialize Content Summarizer
+        logger.info("Initializing Content Summarizer...")
+        summarizer = ContentSummarizer()
+        app_services["summarizer"] = summarizer
+        logger.info("Content Summarizer initialized successfully")
+
+        # Initialize Video Indexer Manager
+        logger.info("Initializing Video Indexer Manager...")
+        video_processor = VideoIndexerManager()
+        app_services["video_processor"] = video_processor
+        logger.info("Video Indexer Manager initialized successfully")
+
+        # Initialize Unified Content Indexer
+        logger.info("Initializing Unified Content Indexer...")
+        content_indexer = UnifiedContentIndexer()
+        app_services["content_indexer"] = content_indexer
+        logger.info("Unified Content Indexer initialized successfully")
+
+        logger.info("All services initialized successfully - Application ready!")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize services: {e}")
+        raise
+
+    # Application is running
+    yield
+
+    # SHUTDOWN - Clean up resources and close connections
+    logger.info("App is shutting down - Cleaning up resources...")
+
+    try:
+        # Close Azure Blob Storage connections
+        if "blob_manager" in app_services:
+            blob_manager = app_services["blob_manager"]
+            if hasattr(blob_manager, '_async_client') and blob_manager._async_client:
+                logger.info("Closing Azure Blob Storage connections...")
+                await blob_manager._async_client.close()
+                logger.info("Blob Storage connections closed")
+
+        # Close OpenAI client connections in Content Indexer
+        if "content_indexer" in app_services:
+            content_indexer = app_services["content_indexer"]
+            if hasattr(content_indexer, 'openai_client') and content_indexer.openai_client:
+                logger.info("Closing OpenAI client connections...")
+                await content_indexer.openai_client.close()
+                logger.info("OpenAI client connections closed")
+
+        # Close OpenAI client connections in Summarizer
+        if "summarizer" in app_services:
+            summarizer = app_services["summarizer"]
+            if hasattr(summarizer, 'openai_client') and summarizer.openai_client:
+                logger.info("Closing Summarizer OpenAI connections...")
+                await summarizer.openai_client.close()
+                logger.info("Summarizer OpenAI connections closed")
+
+        # Note: VideoIndexerManager doesn't hold persistent connections that need closing
+        # It uses httpx.AsyncClient within context managers for each request
+
+        # Clear services dictionary
+        app_services.clear()
+        logger.info("All resources cleaned up successfully")
+
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+
+    logger.info("Application shutdown completed")
+
+# Initialize FastAPI app with lifespan
+app = FastAPI(
+    title="Academic Content API",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 # Add CORS middleware
 app.add_middleware(
@@ -45,9 +135,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize services
-summarizer = ContentSummarizer()
-video_processor = VideoIndexerManager()
+# Get services from app_services (initialized in lifespan)
+def get_summarizer():
+    return app_services.get("summarizer") or ContentSummarizer()
+
+def get_video_processor():
+    return app_services.get("video_processor") or VideoIndexerManager()
+
+def get_blob_manager():
+    return app_services.get("blob_manager") or BlobManager()
+
+def get_content_indexer():
+    return app_services.get("content_indexer") or UnifiedContentIndexer()
 
 # ================================
 # RESPONSE MODELS
@@ -274,6 +373,7 @@ async def process_video_file(request: ProcessVideoRequest):
             raise HTTPException(status_code=422, detail="file_id must be a non-negative integer")
 
         # Start async video processing - returns immediately with target path
+        video_processor = get_video_processor()
         result_blob_path = await video_processor.process_video_to_md(
             request.course_id,
             request.section_id,
@@ -421,7 +521,7 @@ async def delete_from_index(request: DeleteContentRequest):
     - source_id: The source ID that was processed
     """
     try:
-        indexer = UnifiedContentIndexer()
+        indexer = get_content_indexer()
 
         # Perform deletion
         result = indexer.delete_content_by_source(
@@ -507,6 +607,7 @@ async def summarize_md_file(request: SummarizeRequest):
             }
 
         # Use summarizer.summarize_md_file function - it handles everything internally
+        summarizer = get_summarizer()
         result_blob_path = await summarizer.summarize_md_file(request.blob_path)
 
         if result_blob_path:
@@ -562,6 +663,7 @@ async def summarize_section_from_blob(request: SummarizeSectionRequest):
     - blob_path: Path to the created summary file in blob storage
     """
     try:
+        summarizer = get_summarizer()
         result_blob_path = await summarizer.summarize_section_from_blob(request.full_blob_path)
 
         if result_blob_path:
@@ -617,6 +719,7 @@ async def summarize_course_from_blob(request: SummarizeCourseRequest):
     - blob_path: Path to the created summary file in blob storage
     """
     try:
+        summarizer = get_summarizer()
         result_blob_path = await summarizer.summarize_course_from_blob(request.full_blob_path)
 
         if result_blob_path:
