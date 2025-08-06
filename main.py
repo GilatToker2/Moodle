@@ -16,6 +16,12 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import uvicorn
 from Config.logging_config import setup_logging
+# Import modules
+from Source.Services.files_DocAI_processor import document_to_markdown
+from Source.Services.summarizer import ContentSummarizer
+from Source.Services.video_indexer_processor import VideoIndexerManager
+from Source.Services.unified_indexer import index_content_files, UnifiedContentIndexer
+from Source.Services.subject_detector import detect_subject_from_course
 
 # Initialize logger
 logger = setup_logging()
@@ -25,12 +31,7 @@ def debug_log(message):
     """Write debug message using proper logging"""
     logger.debug(message)
 
-# Import modules
-from Source.Services.files_DocAI_processor import document_to_markdown
-from Source.Services.summarizer import ContentSummarizer
-from Source.Services.video_indexer_processor import VideoIndexerManager
-from Source.Services.unified_indexer import index_content_files, UnifiedContentIndexer
-from Source.Services.subject_detector import detect_subject_from_course
+
 
 # Initialize FastAPI app
 app = FastAPI(title="Academic Content API", version="1.0.0")

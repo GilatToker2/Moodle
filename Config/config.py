@@ -5,6 +5,9 @@ Reads configuration from environment variables for security
 
 import os
 from dotenv import load_dotenv
+from Config.logging_config import setup_logging
+
+logger = setup_logging()
 
 # Load environment variables from .env file
 load_dotenv()
@@ -60,8 +63,8 @@ def validate_config():
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
-    print("All required environment variables are set")
+    logger.info("All required environment variables are set")
 
 # Optional: Run validation when module is imported
 # Uncomment the line below if you want automatic validation
-# validate_config()
+validate_config()
