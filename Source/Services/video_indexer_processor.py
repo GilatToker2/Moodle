@@ -431,12 +431,12 @@ class VideoIndexerManager:
         md_content = []
 
         # Main title
-        md_content.append(f"# {structured_data.get('name', 'דוח ניתוח וידאו')}")
+        md_content.append(f"# {structured_data.get('video_name', structured_data.get('name', 'דוח ניתוח וידאו'))}")
         md_content.append("")
 
         # Metadata
         md_content.append("## פרטי הוידאו")
-        md_content.append(f"- **שם הוידאו**: {structured_data.get('name', 'לא זמין')}")
+        md_content.append(f"- **שם הוידאו**: {structured_data.get('video_name', structured_data.get('name', 'לא זמין'))}")
         md_content.append(f"- **מזהה וידאו**: {structured_data.get('id', 'לא זמין')}")
         md_content.append(f"- **משך זמן**: {structured_data.get('duration', 'לא זמין')}")
         md_content.append(f"- **שפה**: {structured_data.get('language', 'לא זמין')}")
@@ -616,7 +616,7 @@ class VideoIndexerManager:
             # Create structured data with video name
             structured_data = {
                 "id": str(file_id),  # Use file_id as identifier instead of video_id
-                "name": video_name,  # Use provided name
+                "video_name": video_name,  # Use provided name with specific key
                 **metadata,
                 "transcript_segments": transcript_segments,
                 "full_transcript": " ".join([seg["text"] for seg in transcript_segments]),
@@ -626,14 +626,6 @@ class VideoIndexerManager:
 
             # Convert to markdown
             md_content = self.parse_insights_to_md(structured_data)
-
-            # Debug logging
-            logger.info(f"MD content type: {type(md_content)}")
-            logger.info(f"MD content length: {len(md_content) if md_content else 'None'}")
-            if md_content:
-                logger.info(f"MD content preview: {md_content[:200]}...")
-            else:
-                logger.info("MD content is None!")
 
             logger.info(f"Processing completed successfully!")
             logger.info(f"Found {len(transcript_segments)} transcript segments")

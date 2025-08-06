@@ -109,7 +109,7 @@ async def document_to_markdown(course_id: str, section_id: str, file_id: int, do
     logger.info(f"Downloading file from raw-data container: {document_url}")
 
     # Step 1: Download blob directly to memory from raw-data container
-    file_bytes = blob_manager_read.download_to_memory(document_url)
+    file_bytes = await blob_manager_read.download_to_memory(document_url)
     if not file_bytes:
         logger.info(f"Failed to download file to memory from raw-data container: {document_url}")
         return None
@@ -131,7 +131,7 @@ async def document_to_markdown(course_id: str, section_id: str, file_id: int, do
 
     logger.info(f"Uploading markdown to processeddata container: {target_blob_path}")
 
-    success = blob_manager_write.upload_text_to_blob(
+    success = await blob_manager_write.upload_text_to_blob(
         text_content=enhanced_md_content,
         blob_name=target_blob_path
     )
