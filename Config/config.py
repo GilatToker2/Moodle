@@ -60,7 +60,7 @@ def validate_config():
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
-    print("✅ All required environment variables are set")
+    print("All required environment variables are set")
 
 # Optional: Run validation when module is imported
 # Uncomment the line below if you want automatic validation

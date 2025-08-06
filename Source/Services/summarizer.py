@@ -233,7 +233,7 @@ class ContentSummarizer:
             line_stripped = line.strip()
 
             # Identify section beginnings
-            if line_stripped == "## 🎓 סוג מקצוע":
+            if line_stripped == "## סוג מקצוע":
                 if current_section and section_content:
                     # Save previous section
                     if current_section == "subject_type":
@@ -246,7 +246,7 @@ class ContentSummarizer:
                 current_section = "subject_type"
                 section_content = []
 
-            elif line_stripped == "## 📝 סיכום השיעור":
+            elif line_stripped == "## סיכום השיעור":
                 if current_section and section_content:
                     if current_section == "subject_type":
                         subject_type = '\n'.join(section_content).strip()
@@ -254,7 +254,7 @@ class ContentSummarizer:
                 current_section = "existing_summary"
                 section_content = []
 
-            elif line_stripped in ["## 📄 Full Transcript", "## 📄 טרנסקריפט מלא", "## טרנסקריפט מלא"]:
+            elif line_stripped in ["## Full Transcript", "## טרנסקריפט מלא", "## טרנסקריפט מלא"]:
                 if current_section and section_content:
                     if current_section == "existing_summary":
                         existing_summary = '\n'.join(section_content).strip()
@@ -283,28 +283,28 @@ class ContentSummarizer:
                 full_transcript = '\n'.join(section_content).strip()
 
 
-        # logger.info(f"🔍 Detected subject type: {subject_type}")
-        # logger.info(f"📝 Existing summary length: {len(existing_summary) if existing_summary else 0} chars")
-        # logger.info(f"📄 Full transcript length: {len(full_transcript) if full_transcript else 0} chars")
+        # logger.info(f" Detected subject type: {subject_type}")
+        # logger.info(f" Existing summary length: {len(existing_summary) if existing_summary else 0} chars")
+        # logger.info(f" Full transcript length: {len(full_transcript) if full_transcript else 0} chars")
         #
         # # הדפסת תוכן מפורט
         # logger.info("\n" + "=" * 60)
-        # logger.info("📋 PARSED CONTENT DETAILS:")
+        # logger.info(" PARSED CONTENT DETAILS:")
         # logger.info("=" * 60)
         #
-        # logger.info(f"\n🎓 SUBJECT TYPE:")
+        # logger.info(f"\n SUBJECT TYPE:")
         # if subject_type:
         #     logger.info(f"'{subject_type}'")
         # else:
         #     logger.info("None")
         #
-        # logger.info(f"\n📝 EXISTING SUMMARY:")
+        # logger.info(f"\n EXISTING SUMMARY:")
         # if existing_summary:
         #     logger.info(f"'{existing_summary}'")
         # else:
         #     logger.info("None")
 
-        # logger.info(f"\n📄 TRANSCRIPT PREVIEW:")
+        # logger.info(f"\n TRANSCRIPT PREVIEW:")
         # if full_transcript:
         #     lines = full_transcript.split('\n')
         #     if len(lines) > 4:
@@ -469,7 +469,7 @@ class ContentSummarizer:
 
                 # If it's a regular document - standard handling
                 else:
-                    logger.info("📄 Document file - using standard processing")
+                    logger.info("Document file - using standard processing")
                     # Read file
                     with open(temp_file_path, 'r', encoding='utf-8') as f:
                         content = f.read()
@@ -535,7 +535,7 @@ class ContentSummarizer:
             # Create new summary path
             summary_blob_path = f"{course_id}/{section_id}/file_summaries/{base_name}.md"
 
-            logger.info(f"📤 Saving summary to blob: {summary_blob_path}")
+            logger.info(f"Saving summary to blob: {summary_blob_path}")
 
             # Save to blob
             success = await self.blob_manager.upload_text_to_blob(
