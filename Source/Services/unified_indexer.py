@@ -13,6 +13,8 @@ import uuid
 import tiktoken
 import re
 import os
+import ssl
+import httpx
 from typing import List, Dict
 from datetime import datetime, timezone
 from azure.search.documents.indexes import SearchIndexClient
@@ -64,21 +66,21 @@ class UnifiedContentIndexer:
             create_new: If True (default), delete existing index and create new one.
                        If False, use existing index or create if doesn't exist.
         """
-        logger.info(f"🔧 Setting up unified index: {self.index_name}")
+        logger.info(f"Setting up unified index: {self.index_name}")
 
         try:
             # Check if index exists
             try:
                 existing_index = self.index_client.get_index(self.index_name)
                 if create_new:
-                    logger.info(f"🗑️ Deleting existing index: {self.index_name}")
+                    logger.info(f"Deleting existing index: {self.index_name}")
                     self.index_client.delete_index(self.index_name)
-                    logger.info(f"📝 Creating new unified index: {self.index_name}")
+                    logger.info(f"Creating new unified index: {self.index_name}")
                 else:
-                    logger.info(f"✅ Using existing unified index: {self.index_name}")
+                    logger.info(f"Using existing unified index: {self.index_name}")
                     return True
             except ResourceNotFoundError:
-                logger.info(f"📝 Creating new unified index: {self.index_name}")
+                logger.info(f"Creating new unified index: {self.index_name}")
 
             # Vector search configuration
             hnsw_algo = HnswAlgorithmConfiguration(name="my-hnsw-config")
@@ -149,7 +151,7 @@ class UnifiedContentIndexer:
             )
 
             self.index_client.create_or_update_index(index)
-            logger.info("✅ Unified index created successfully")
+            logger.info("Unified index created successfully")
 
             # # Print detailed index schema
             # logger.info("\n📋 Created index schema - all fields:")
@@ -719,7 +721,7 @@ def _detect_content_type_from_path(blob_path: str) -> str:
 
 
 
-def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Dict:
+async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Dict:
     """
     Parse video MD file from blob storage and convert to structured data format expected by indexer
     """
@@ -727,7 +729,7 @@ def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Dict:
     logger.info(f"📖 Reading video MD file from blob: {blob_path}")
 
     # Download content from blob to memory
-    file_bytes = blob_manager.download_to_memory(blob_path)
+    file_bytes = await blob_manager.download_to_memory(blob_path)
     if not file_bytes:
         raise Exception(f"Failed to download blob: {blob_path}")
 
@@ -859,14 +861,14 @@ def convert_seconds_to_timestamp(seconds: float) -> str:
         return "0:00:00.00"
 
 
-def parse_document_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Dict:
+async def parse_document_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Dict:
     """
     Parse document MD file from blob storage and convert to document data format expected by indexer
     """
     logger.info(f"📖 Reading document MD file from blob: {blob_path}")
 
     # Download content from blob to memory
-    file_bytes = blob_manager.download_to_memory(blob_path)
+    file_bytes = await blob_manager.download_to_memory(blob_path)
     if not file_bytes:
         raise Exception(f"Failed to download blob: {blob_path}")
 
@@ -924,7 +926,7 @@ async def index_content_files(blob_paths: List[str], create_new_index: bool = Fa
             if content_type == "video":
                 logger.info(f'content type: {content_type}')
                 # Process video file
-                video_data = parse_video_md_from_blob(blob_path, blob_manager)
+                video_data = await parse_video_md_from_blob(blob_path, blob_manager)
                 segments = video_data.get("transcript_segments", [])
                 if not segments:
                     logger.info(f"⚠️ File {blob_path} does not contain transcript, skipping.")
@@ -995,7 +997,7 @@ async def index_content_files(blob_paths: List[str], create_new_index: bool = Fa
 
             elif content_type == "document":
                 # Process document file
-                doc_data = parse_document_md_from_blob(blob_path, blob_manager)
+                doc_data = await parse_document_md_from_blob(blob_path, blob_manager)
                 markdown_content = doc_data.get("content", "")
                 if not markdown_content:
                     logger.info(f"⚠️ File {blob_path} is empty or not loaded, skipping.")
