@@ -36,10 +36,7 @@ from Config.config import (
 )
 
 from Config.logging_config import setup_logging
-
 logger = setup_logging()
-
-
 class UnifiedContentIndexer:
     """
     Unified indexer for different content types - videos and documents
@@ -121,7 +118,7 @@ class UnifiedContentIndexer:
                 # Chunk information
                 SimpleField(name="chunk_index", type=SearchFieldDataType.Int32, filterable=True, sortable=True),
 
-                # Video-specific fields
+                #Video-specific fields
                 SimpleField(name="start_time", type=SearchFieldDataType.String, filterable=True),
                 SimpleField(name="end_time", type=SearchFieldDataType.String, filterable=True, sortable=True),
                 SearchableField(name="keywords", type=SearchFieldDataType.String, analyzer_name="he.microsoft"),
@@ -537,7 +534,6 @@ class UnifiedContentIndexer:
                 "error": str(e),
                 "message": f"Deletion error: {e}"
             }
-
     #
     # def update_content_file(self, blob_path: str, force_update: bool = False) -> Dict:
     #     """
@@ -724,6 +720,7 @@ def _detect_content_type_from_path(blob_path: str) -> str:
         return "unknown"
 
 
+
 async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Dict:
     """
     Parse video MD file from blob storage and convert to structured data format expected by indexer
@@ -749,6 +746,7 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
     duration_match = re.search(r'\*\*(?:Duration|משך זמן)\*\*: (.+)', content)
     total_duration_str = duration_match.group(1) if duration_match else "00:00:00"
     total_duration_seconds = convert_timestamp_to_seconds(total_duration_str)
+
 
     # Extract keywords
     keywords_match = re.search(r'## 🔍 (?:Keywords|מילות מפתח)\n`(.+)`', content)
@@ -790,6 +788,7 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
             # Last segment - use total video duration
             end_seconds = total_duration_seconds
 
+
         segment = {
             "text": text.strip(),
             "start_time": timestamp,
@@ -810,6 +809,7 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
     else:
         video_name = f"Video {base_filename}"
 
+
     # Create structured data
     structured_data = {
         "id": video_id,
@@ -829,7 +829,6 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
 
     return structured_data
 
-
 def convert_timestamp_to_seconds(timestamp: str) -> float:
     """Convert timestamp like '0:00:01.03' to seconds"""
     try:
@@ -848,6 +847,7 @@ def convert_timestamp_to_seconds(timestamp: str) -> float:
             return float(timestamp)
     except:
         return 0.0
+
 
 
 def convert_seconds_to_timestamp(seconds: float) -> str:
@@ -891,192 +891,199 @@ async def parse_document_md_from_blob(blob_path: str, blob_manager: BlobManager)
 
 async def index_content_files(blob_paths: List[str], create_new_index: bool = False) -> str:
     """
-    NON-BLOCKING: Start indexing MD files from blob storage to unified index.
-    Returns immediately after starting background processing.
+    FULLY ASYNC: Index MD files from blob storage to unified index with batching and concurrency.
+    This function is designed to run in FastAPI BackgroundTasks.
 
     Args:
         blob_paths: List of blob paths of MD files (e.g., ["Videos_md/video.md", "Docs_md/doc.md"])
         create_new_index: Whether to create new index (True) or add to existing index (False)
 
     Returns:
-        Immediate response - processing continues in background
-    """
-    logger.info(f"Starting NON-BLOCKING indexing of {len(blob_paths)} files")
-
-    # Start background processing as async task
-    asyncio.create_task(
-        _background_index_content_files(blob_paths, create_new_index)
-    )
-
-    # Return immediately - processing continues in background
-    return f"Indexing started for {len(blob_paths)} files. Processing continues in background. Check logs for progress."
-
-
-async def _background_index_content_files(blob_paths: List[str], create_new_index: bool = False) -> None:
-    """
-    Background processing of content files indexing - runs as async task
+        Success message after completion
     """
     try:
-        logger.info(f"Background indexing started for {len(blob_paths)} files")
+        logger.info(f"🚀 Starting async indexing of {len(blob_paths)} files")
 
         indexer = UnifiedContentIndexer()
         blob_manager = BlobManager()
 
-        # Create/initialize index - always uses INDEX_NAME from config
+        # Create/initialize index
         if not indexer.create_index(create_new=create_new_index):
-            logger.info("Failed to create index")
-            return
+            error_msg = "❌ Failed to create/initialize index"
+            logger.error(error_msg)
+            return error_msg
 
-        all_docs = []
-        processed_videos = 0
-        processed_documents = 0
-        skipped_files = 0
+        # Process files in small batches with concurrency control
+        batch_size = 3  # Small batches to avoid memory issues
+        total_processed = 0
+        total_chunks = 0
+        total_errors = 0
 
-        logger.info(f"Processing {len(blob_paths)} MD files from blob storage...")
+        logger.info(f"📦 Processing in batches of {batch_size} files")
 
-        for blob_path in blob_paths:
-            try:
-                logger.info(f"Processing file: {blob_path}")
+        for i in range(0, len(blob_paths), batch_size):
+            batch = blob_paths[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            total_batches = (len(blob_paths) + batch_size - 1) // batch_size
 
-                # Detect file type from path
-                content_type = _detect_content_type_from_path(blob_path)
-                logger.info(f"  Detected as type: {content_type}")
+            logger.info(f"🔄 Processing batch {batch_num}/{total_batches} ({len(batch)} files)")
 
-                if content_type == "video":
-                    # Process video file
-                    video_data = await parse_video_md_from_blob(blob_path, blob_manager)
-                    segments = video_data.get("transcript_segments", [])
-                    if not segments:
-                        logger.info(f"File {blob_path} does not contain transcript, skipping.")
-                        skipped_files += 1
-                        continue
+            # Process batch with controlled concurrency
+            batch_docs = []
+            batch_results = await asyncio.gather(
+                *[_process_single_file_safe(blob_path, blob_manager, indexer) for blob_path in batch],
+                return_exceptions=True
+            )
 
-                    # Split transcript into chunks
-                    chunks = indexer._process_video_segments_to_chunks(segments)
-                    texts = [chunk["text"] for chunk in chunks if chunk.get("text")]
-                    if not texts:
-                        skipped_files += 1
-                        continue
-
-                    # Generate embeddings
-                    embeddings = await indexer.embed_texts_batch(texts)
-
-                    # Extract course_id from blob path
-                    course_id = blob_path.split('/')[0] if '/' in blob_path else "unknown"
-
-                    # Build index documents for each chunk
-                    keywords_str = ", ".join(video_data.get("keywords", []))
-                    topics_str = ", ".join(video_data.get("topics", []))
-
-                    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                        if not embedding:
-                            continue
-                        doc = {
-                            "id": str(uuid.uuid4()),
-                            "content_type": "video",
-                            "source_id": video_data.get("id", "unknown"),
-                            "course_id": course_id,
-                            "text": chunk.get("text", ""),
-                            "vector": embedding,
-                            "chunk_index": chunk.get("chunk_index", 0),
-                            "start_time": chunk.get("start_time", "00:00:00"),
-                            "end_time": chunk.get("end_time", "00:00:00"),
-                            "section_title": None,
-                            "created_date": datetime.now(timezone.utc),
-                            "keywords": keywords_str,
-                            "topics": topics_str,
-                        }
-                        all_docs.append(doc)
-                    processed_videos += 1
-
-                elif content_type == "document":
-                    # Process document file
-                    doc_data = await parse_document_md_from_blob(blob_path, blob_manager)
-                    markdown_content = doc_data.get("content", "")
-                    if not markdown_content:
-                        logger.info(f"File {blob_path} is empty or not loaded, skipping.")
-                        skipped_files += 1
-                        continue
-
-                    # Split document content into chunks
-                    chunks = indexer._process_document_to_chunks(markdown_content)
-                    texts = [chunk["text"] for chunk in chunks if chunk.get("text")]
-                    if not texts:
-                        skipped_files += 1
-                        continue
-
-                    # Generate embeddings
-                    embeddings = await indexer.embed_texts_batch(texts)
-
-                    # Extract course_id from blob path
-                    course_id = blob_path.split('/')[0] if '/' in blob_path else "unknown"
-
-                    # Build index documents for each chunk
-                    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                        if not embedding:
-                            continue
-                        doc = {
-                            "id": str(uuid.uuid4()),
-                            "content_type": "document",
-                            "source_id": doc_data.get("id", "unknown"),
-                            "course_id": course_id,
-                            "text": chunk.get("text", ""),
-                            "vector": embedding,
-                            "chunk_index": chunk.get("chunk_index", 0),
-                            "start_time": None,
-                            "end_time": None,
-                            "section_title": chunk.get("section_title", ""),
-                            "created_date": datetime.now(timezone.utc),
-                            "keywords": None,
-                            "topics": None,
-                        }
-                        all_docs.append(doc)
-                    processed_documents += 1
-
+            # Collect results from batch
+            for blob_path, result in zip(batch, batch_results):
+                if isinstance(result, Exception):
+                    logger.error(f"❌ Error processing {blob_path}: {result}")
+                    total_errors += 1
+                elif result and len(result) > 0:
+                    file_docs, content_type = result
+                    batch_docs.extend(file_docs)
+                    total_processed += 1
+                    logger.info(f"✅ Processed {blob_path} ({content_type}): {len(file_docs)} chunks")
                 else:
-                    logger.info(f"Cannot identify file type for: {blob_path}")
-                    skipped_files += 1
-                    continue
+                    logger.warning(f"⚠️ Skipped {blob_path} (empty or unsupported)")
+                    total_errors += 1
 
-            except Exception as e:
-                logger.info(f"Error processing file {blob_path}: {e}")
-                skipped_files += 1
-                continue
+            # Upload batch to index immediately (smaller uploads)
+            if batch_docs:
+                try:
+                    search_client = SearchClient(indexer.search_endpoint, INDEX_NAME, indexer.credential)
 
-        # Display processing summary
-        logger.info(f"Processing summary:")
-        logger.info(f"  Video files processed: {processed_videos}")
-        logger.info(f"  Document files processed: {processed_documents}")
-        logger.info(f"  Files skipped: {skipped_files}")
-        logger.info(f"  Total chunks created: {len(all_docs)}")
+                    logger.info(f"📤 Uploading batch {batch_num}: {len(batch_docs)} chunks")
+                    results = search_client.upload_documents(batch_docs)
 
-        # Upload to index - single operation since we're running in background
-        if all_docs:
-            try:
-                search_client = SearchClient(indexer.search_endpoint, INDEX_NAME, indexer.credential)
+                    succeeded = sum(1 for r in results if r.succeeded)
+                    failed = len(results) - succeeded
+                    total_chunks += succeeded
 
-                logger.info(f"Uploading {len(all_docs)} documents to index")
+                    logger.info(f"✅ Batch {batch_num} uploaded: {succeeded} succeeded, {failed} failed")
 
-                results = search_client.upload_documents(all_docs)
-                succeeded = sum(1 for r in results if r.succeeded)
-                failed = len(results) - succeeded
+                    if failed > 0:
+                        total_errors += failed
 
-                logger.info(f"Upload completed: {succeeded} succeeded, {failed} failed")
+                except Exception as e:
+                    logger.error(f"❌ Error uploading batch {batch_num}: {e}")
+                    total_errors += len(batch_docs)
 
-                # Display final statistics
-                indexer.get_stats()
+            # Yield control between batches to prevent blocking
+            await asyncio.sleep(0.2)
 
-                logger.info(f"Background indexing completed successfully!")
-                logger.info(
-                    f"Final result: {succeeded} chunks uploaded, {failed} failed, {skipped_files} files skipped")
+        # Final summary
+        logger.info(f"🎯 Indexing completed!")
+        logger.info(f"  📊 Files processed: {total_processed}/{len(blob_paths)}")
+        logger.info(f"  📊 Total chunks indexed: {total_chunks}")
+        logger.info(f"  📊 Errors: {total_errors}")
 
-            except Exception as e:
-                logger.info(f"Error uploading documents to index: {e}")
-        else:
-            logger.info("No documents found for upload (all files might have been empty)")
+        # Display final index statistics
+        indexer.get_stats()
+
+        return f"✅ Indexing completed: {total_processed} files processed, {total_chunks} chunks indexed, {total_errors} errors"
 
     except Exception as e:
-        logger.info(f"Background indexing failed: {str(e)}")
+        error_msg = f"❌ Indexing failed: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+
+
+async def _process_single_file_safe(blob_path: str, blob_manager: BlobManager, indexer: UnifiedContentIndexer):
+    """
+    Safely process a single file with error handling
+    Returns (docs, content_type) or None if failed
+    """
+    try:
+        return await _process_single_file(blob_path, blob_manager, indexer)
+    except Exception as e:
+        logger.error(f"Error processing file {blob_path}: {e}")
+        return None
+
+
+async def _process_single_file(blob_path: str, blob_manager: BlobManager, indexer: UnifiedContentIndexer):
+    """
+    Process a single file and return its documents
+    Returns (docs, content_type) tuple
+    """
+    # Detect content type from path
+    content_type = _detect_content_type_from_path(blob_path)
+
+    if content_type == "video":
+        # Parse video MD file
+        video_data = await parse_video_md_from_blob(blob_path, blob_manager)
+        if not video_data or not video_data.get("transcript_segments"):
+            return None
+
+        # Convert to chunks
+        chunks = indexer._process_video_segments_to_chunks(video_data["transcript_segments"])
+
+        # Generate embeddings for chunks
+        texts = [chunk["text"] for chunk in chunks]
+        embeddings = await indexer.embed_texts_batch(texts, batch_size=8)
+
+        # Create documents for index
+        docs = []
+        for chunk, embedding in zip(chunks, embeddings):
+            doc = {
+                "id": str(uuid.uuid4()),
+                "content_type": "video",
+                "source_id": video_data["id"],
+                "course_id": _extract_course_id_from_path(blob_path),
+                "text": chunk["text"],
+                "vector": embedding,
+                "chunk_index": chunk["chunk_index"],
+                "start_time": chunk["start_time"],
+                "end_time": chunk["end_time"],
+                "keywords": ", ".join(video_data.get("keywords", [])),
+                "topics": ", ".join(video_data.get("topics", [])),
+                "created_date": datetime.now(timezone.utc).isoformat()
+            }
+            docs.append(doc)
+
+        return docs, "video"
+
+    elif content_type == "document":
+        # Parse document MD file
+        doc_data = await parse_document_md_from_blob(blob_path, blob_manager)
+        if not doc_data or not doc_data.get("content"):
+            return None
+
+        # Convert to chunks
+        chunks = indexer._process_document_to_chunks(doc_data["content"])
+
+        # Generate embeddings for chunks
+        texts = [chunk["text"] for chunk in chunks]
+        embeddings = await indexer.embed_texts_batch(texts, batch_size=8)
+
+        # Create documents for index
+        docs = []
+        for chunk, embedding in zip(chunks, embeddings):
+            doc = {
+                "id": str(uuid.uuid4()),
+                "content_type": "document",
+                "source_id": doc_data["id"],
+                "course_id": _extract_course_id_from_path(blob_path),
+                "text": chunk["text"],
+                "vector": embedding,
+                "chunk_index": chunk["chunk_index"],
+                "section_title": chunk.get("section_title", ""),
+                "created_date": datetime.now(timezone.utc).isoformat()
+            }
+            docs.append(doc)
+
+        return docs, "document"
+
+    else:
+        logger.warning(f"Unsupported content type: {content_type} for {blob_path}")
+        return None
+
+
+def _extract_course_id_from_path(blob_path: str) -> str:
+    """Extract course ID from blob path like 'CS101/Section1/Videos_md/file.md'"""
+    parts = blob_path.split('/')
+    return parts[0] if parts else "unknown"
 
 
 async def main():
@@ -1132,6 +1139,7 @@ async def main():
     #     logger.info("\n📊 סטטיסטיקות אחרי מחיקה:")
     #     after_delete_stats = indexer.get_stats()
 
+
     #     # # סיכום הבדיקה
     #     # logger.info("\n✅ סיכום בדיקת הפונקציות החדשות:")
     #     # logger.info(f"  📄 Chunks התחלתיים: {initial_stats.get('total_chunks', 0)}")
@@ -1150,7 +1158,7 @@ async def main():
     #
     # else:
     #     logger.info("⚠️ לא נמצאו מקורות באינדקס לבדיקה")
-    #     logger.info("💡 הרץ קודם את הפונקציה index_content_files כדי להוסיף תוכן לאינדקס")
+    #     logger.info("� הרץ קודם את הפונקציה index_content_files כדי להוסיף תוכן לאינדקס")
 
 
 if __name__ == "__main__":
