@@ -36,7 +36,10 @@ from Config.config import (
 )
 
 from Config.logging_config import setup_logging
+
 logger = setup_logging()
+
+
 class UnifiedContentIndexer:
     """
     Unified indexer for different content types - videos and documents
@@ -118,7 +121,7 @@ class UnifiedContentIndexer:
                 # Chunk information
                 SimpleField(name="chunk_index", type=SearchFieldDataType.Int32, filterable=True, sortable=True),
 
-                #Video-specific fields
+                # Video-specific fields
                 SimpleField(name="start_time", type=SearchFieldDataType.String, filterable=True),
                 SimpleField(name="end_time", type=SearchFieldDataType.String, filterable=True, sortable=True),
                 SearchableField(name="keywords", type=SearchFieldDataType.String, analyzer_name="he.microsoft"),
@@ -534,6 +537,7 @@ class UnifiedContentIndexer:
                 "error": str(e),
                 "message": f"Deletion error: {e}"
             }
+
     #
     # def update_content_file(self, blob_path: str, force_update: bool = False) -> Dict:
     #     """
@@ -720,7 +724,6 @@ def _detect_content_type_from_path(blob_path: str) -> str:
         return "unknown"
 
 
-
 async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Dict:
     """
     Parse video MD file from blob storage and convert to structured data format expected by indexer
@@ -746,7 +749,6 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
     duration_match = re.search(r'\*\*(?:Duration|משך זמן)\*\*: (.+)', content)
     total_duration_str = duration_match.group(1) if duration_match else "00:00:00"
     total_duration_seconds = convert_timestamp_to_seconds(total_duration_str)
-
 
     # Extract keywords
     keywords_match = re.search(r'## 🔍 (?:Keywords|מילות מפתח)\n`(.+)`', content)
@@ -788,7 +790,6 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
             # Last segment - use total video duration
             end_seconds = total_duration_seconds
 
-
         segment = {
             "text": text.strip(),
             "start_time": timestamp,
@@ -809,7 +810,6 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
     else:
         video_name = f"Video {base_filename}"
 
-
     # Create structured data
     structured_data = {
         "id": video_id,
@@ -829,6 +829,7 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
 
     return structured_data
 
+
 def convert_timestamp_to_seconds(timestamp: str) -> float:
     """Convert timestamp like '0:00:01.03' to seconds"""
     try:
@@ -847,7 +848,6 @@ def convert_timestamp_to_seconds(timestamp: str) -> float:
             return float(timestamp)
     except:
         return 0.0
-
 
 
 def convert_seconds_to_timestamp(seconds: float) -> str:
@@ -1050,44 +1050,25 @@ async def _background_index_content_files(blob_paths: List[str], create_new_inde
         logger.info(f"  Files skipped: {skipped_files}")
         logger.info(f"  Total chunks created: {len(all_docs)}")
 
-        # Upload to index in batches
+        # Upload to index - single operation since we're running in background
         if all_docs:
             try:
                 search_client = SearchClient(indexer.search_endpoint, INDEX_NAME, indexer.credential)
 
-                # Upload in batches to avoid timeout
-                batch_size = 100
-                total_succeeded = 0
-                total_failed = 0
+                logger.info(f"Uploading {len(all_docs)} documents to index")
 
-                logger.info(f"Uploading {len(all_docs)} documents in batches of {batch_size}")
+                results = search_client.upload_documents(all_docs)
+                succeeded = sum(1 for r in results if r.succeeded)
+                failed = len(results) - succeeded
 
-                for i in range(0, len(all_docs), batch_size):
-                    batch = all_docs[i:i + batch_size]
-                    batch_num = (i // batch_size) + 1
-                    total_batches = (len(all_docs) + batch_size - 1) // batch_size
-
-                    logger.info(f"Uploading batch {batch_num}/{total_batches} ({len(batch)} documents)")
-
-                    try:
-                        results = search_client.upload_documents(batch)
-                        succeeded = sum(1 for r in results if r.succeeded)
-                        failed = len(results) - succeeded
-
-                        total_succeeded += succeeded
-                        total_failed += failed
-
-                        logger.info(f"Batch {batch_num}: {succeeded} succeeded, {failed} failed")
-
-                    except Exception as e:
-                        logger.info(f"Error uploading batch {batch_num}: {e}")
-                        total_failed += len(batch)
+                logger.info(f"Upload completed: {succeeded} succeeded, {failed} failed")
 
                 # Display final statistics
                 indexer.get_stats()
 
                 logger.info(f"Background indexing completed successfully!")
-                logger.info(f"Final result: {total_succeeded} chunks uploaded, {total_failed} failed, {skipped_files} files skipped")
+                logger.info(
+                    f"Final result: {succeeded} chunks uploaded, {failed} failed, {skipped_files} files skipped")
 
             except Exception as e:
                 logger.info(f"Error uploading documents to index: {e}")
@@ -1150,7 +1131,6 @@ async def main():
     #     # בדיקת סטטיסטיקות אחרי מחיקה
     #     logger.info("\n📊 סטטיסטיקות אחרי מחיקה:")
     #     after_delete_stats = indexer.get_stats()
-
 
     #     # # סיכום הבדיקה
     #     # logger.info("\n✅ סיכום בדיקת הפונקציות החדשות:")
