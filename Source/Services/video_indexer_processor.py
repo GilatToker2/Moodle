@@ -627,6 +627,14 @@ class VideoIndexerManager:
             # Convert to markdown
             md_content = self.parse_insights_to_md(structured_data)
 
+            # Debug logging
+            logger.info(f"MD content type: {type(md_content)}")
+            logger.info(f"MD content length: {len(md_content) if md_content else 'None'}")
+            if md_content:
+                logger.info(f"MD content preview: {md_content[:200]}...")
+            else:
+                logger.info("MD content is None!")
+
             logger.info(f"Processing completed successfully!")
             logger.info(f"Found {len(transcript_segments)} transcript segments")
 
