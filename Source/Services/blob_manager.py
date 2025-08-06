@@ -22,6 +22,9 @@ class BlobManager:
         # If no container_name is passed, use default from config
         self.container_name = container_name if container_name is not None else CONTAINER_NAME
 
+        # Initialize async client for reuse
+        self._async_client = AsyncBlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING)
+
         # File type to content type mapping
         # File type to content type mapping
         self.content_types = {
@@ -66,20 +69,19 @@ class BlobManager:
             True if download succeeded, False otherwise
         """
         try:
-            async with AsyncBlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING) as async_blob_service:
-                container_client = async_blob_service.get_container_client(self.container_name)
-                blob_client = container_client.get_blob_client(blob_name)
+            container_client = self._async_client.get_container_client(self.container_name)
+            blob_client = container_client.get_blob_client(blob_name)
 
-                logger.info(f"Downloading file: {blob_name} -> {local_file_path}")
+            logger.info(f"Downloading file: {blob_name} -> {local_file_path}")
 
-                stream = await blob_client.download_blob()
-                file_bytes = await stream.readall()
+            stream = await blob_client.download_blob()
+            file_bytes = await stream.readall()
 
-                with open(local_file_path, 'wb') as file_data:
-                    file_data.write(file_bytes)
+            with open(local_file_path, 'wb') as file_data:
+                file_data.write(file_bytes)
 
-                logger.info(f"File downloaded successfully: {local_file_path}")
-                return True
+            logger.info(f"File downloaded successfully: {local_file_path}")
+            return True
 
         except Exception as e:
             logger.info(f"Error downloading file {blob_name}: {e}")
@@ -96,16 +98,15 @@ class BlobManager:
             List of file names
         """
         try:
-            async with AsyncBlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING) as async_blob_service:
-                container_client = async_blob_service.get_container_client(self.container_name)
+            container_client = self._async_client.get_container_client(self.container_name)
 
-                name_filter = f"{folder}/" if folder else ""
-                blob_list = []
+            name_filter = f"{folder}/" if folder else ""
+            blob_list = []
 
-                async for blob in container_client.list_blobs(name_starts_with=name_filter):
-                    blob_list.append(blob.name)
+            async for blob in container_client.list_blobs(name_starts_with=name_filter):
+                blob_list.append(blob.name)
 
-                return blob_list
+            return blob_list
 
         except Exception as e:
             logger.info(f"Error listing files: {e}")
@@ -172,22 +173,21 @@ class BlobManager:
             SAS URL for the file
         """
         try:
-            async with AsyncBlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING) as async_blob_service:
-                # Generate SAS token
-                sas_token = generate_blob_sas(
-                    account_name=async_blob_service.account_name,
-                    container_name=self.container_name,
-                    blob_name=blob_name,
-                    account_key=async_blob_service.credential.account_key,
-                    permission=BlobSasPermissions(read=True),
-                    expiry=datetime.utcnow() + timedelta(hours=hours)
-                )
+            # Generate SAS token
+            sas_token = generate_blob_sas(
+                account_name=self._async_client.account_name,
+                container_name=self.container_name,
+                blob_name=blob_name,
+                account_key=self._async_client.credential.account_key,
+                permission=BlobSasPermissions(read=True),
+                expiry=datetime.utcnow() + timedelta(hours=hours)
+            )
 
-                # Create full URL
-                blob_url = f"{async_blob_service.primary_endpoint}{self.container_name}/{blob_name}?{sas_token}"
+            # Create full URL
+            blob_url = f"{self._async_client.primary_endpoint}{self.container_name}/{blob_name}?{sas_token}"
 
-                logger.info(f"Generated SAS URL for file: {blob_name} (valid for {hours} hours)")
-                return blob_url
+            logger.info(f"Generated SAS URL for file: {blob_name} (valid for {hours} hours)")
+            return blob_url
 
         except Exception as e:
             logger.info(f"Error generating SAS URL for {blob_name}: {e}")
@@ -204,17 +204,16 @@ class BlobManager:
             File bytes or None if failed
         """
         try:
-            async with AsyncBlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING) as async_blob_service:
-                container_client = async_blob_service.get_container_client(self.container_name)
-                blob_client = container_client.get_blob_client(blob_name)
+            container_client = self._async_client.get_container_client(self.container_name)
+            blob_client = container_client.get_blob_client(blob_name)
 
-                logger.info(f"Downloading file to memory: {blob_name}")
+            logger.info(f"Downloading file to memory: {blob_name}")
 
-                stream = await blob_client.download_blob()
-                file_bytes = await stream.readall()
+            stream = await blob_client.download_blob()
+            file_bytes = await stream.readall()
 
-                logger.info(f"File downloaded successfully to memory: {blob_name} ({len(file_bytes)} bytes)")
-                return file_bytes
+            logger.info(f"File downloaded successfully to memory: {blob_name} ({len(file_bytes)} bytes)")
+            return file_bytes
 
         except Exception as e:
             logger.info(f"Error downloading file to memory {blob_name}: {e}")
@@ -239,21 +238,20 @@ class BlobManager:
             # Determine content type based on file extension
             content_type = self._get_content_type(blob_name)
 
-            async with AsyncBlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING) as async_blob_service:
-                container_client = async_blob_service.get_container_client(target_container)
+            container_client = self._async_client.get_container_client(target_container)
 
-                logger.info(f"Uploading text to blob: {target_container}/{blob_name}")
+            logger.info(f"Uploading text to blob: {target_container}/{blob_name}")
 
-                # Direct text upload
-                await container_client.upload_blob(
-                    name=blob_name,
-                    data=text_content.encode('utf-8'),
-                    overwrite=True,
-                    content_settings=ContentSettings(content_type=content_type)
-                )
+            # Direct text upload
+            await container_client.upload_blob(
+                name=blob_name,
+                data=text_content.encode('utf-8'),
+                overwrite=True,
+                content_settings=ContentSettings(content_type=content_type)
+            )
 
-                logger.info(f"Text uploaded successfully: {target_container}/{blob_name}")
-                return True
+            logger.info(f"Text uploaded successfully: {target_container}/{blob_name}")
+            return True
 
         except Exception as e:
             logger.info(f"Error uploading text to blob: {e}")
