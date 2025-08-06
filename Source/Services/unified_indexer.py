@@ -154,10 +154,10 @@ class UnifiedContentIndexer:
             logger.info("Unified index created successfully")
 
             # # Print detailed index schema
-            # logger.info("\n📋 Created index schema - all fields:")
+            # logger.info("\n Created index schema - all fields:")
             # logger.info("=" * 80)
             # for field in fields:
-            #     field_info = f"  🔹 {field.name} ({field.type})"
+            #     field_info = f"   {field.name} ({field.type})"
             #
             #     # Add additional properties
             #     properties = []
@@ -182,25 +182,25 @@ class UnifiedContentIndexer:
             #     logger.info(field_info)
             #
             # logger.info("=" * 80)
-            # logger.info("📝 Field explanations:")
-            # logger.info("  🆔 id - unique identifier for each chunk")
-            # logger.info("  📋 content_type - content type (video/document)")
-            # logger.info("  📋 source_id - source identifier (video_id/document_id)")
-            # logger.info("  📝 text - textual content")
-            # logger.info("  📊 vector - embedding vector")
-            # logger.info("  📋 chunk_index - chunk number")
-            # logger.info("  ⏰ start_time - start time (video only)")
-            # logger.info("  ⏰ end_time - end time (video only)")
-            # logger.info("  📑 section_title - section title (documents only)")
-            # logger.info("  📅 created_date - creation date")
-            # logger.info("  🔍 keywords - keywords")
-            # logger.info("  🏷️ topics - topics")
+            # logger.info(" Field explanations:")
+            # logger.info("   id - unique identifier for each chunk")
+            # logger.info("   content_type - content type (video/document)")
+            # logger.info("   source_id - source identifier (video_id/document_id)")
+            # logger.info("   text - textual content")
+            # logger.info("   vector - embedding vector")
+            # logger.info("   chunk_index - chunk number")
+            # logger.info("   start_time - start time (video only)")
+            # logger.info("   end_time - end time (video only)")
+            # logger.info("   section_title - section title (documents only)")
+            # logger.info("   created_date - creation date")
+            # logger.info("   keywords - keywords")
+            # logger.info("   topics - topics")
             # logger.info("=" * 80)
 
             return True
 
         except Exception as e:
-            logger.info(f"❌ Error creating unified index: {e}")
+            logger.info(f"Error creating unified index: {e}")
             return False
 
     async def embed_texts_batch(self, texts: List[str], batch_size: int = 16) -> List[List[float]]:
@@ -209,7 +209,7 @@ class UnifiedContentIndexer:
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
-            logger.info(f"  🔄 Embedding batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
+            logger.info(f"   Embedding batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
 
             try:
                 response = await self.openai_client.embeddings.create(
@@ -220,7 +220,7 @@ class UnifiedContentIndexer:
                 embeddings.extend(batch_embeddings)
 
             except Exception as e:
-                logger.info(f"❌ Error generating embeddings: {e}")
+                logger.info(f"Error generating embeddings: {e}")
                 embeddings.extend([[] for _ in batch])
 
         return embeddings
@@ -374,7 +374,7 @@ class UnifiedContentIndexer:
 
     def _process_document_to_chunks(self, markdown_content: str) -> List[Dict]:
         """Convert document markdown to searchable chunks using sentence-based chunking"""
-        logger.info("📄 Processing document with sentence-based chunking")
+        logger.info("Processing document with sentence-based chunking")
 
         # Split by headers to preserve sections
         sections = re.split(r'\n#+\s+', markdown_content)
@@ -410,7 +410,7 @@ class UnifiedContentIndexer:
                 all_chunks.append(chunk)
                 global_chunk_idx += 1
 
-        logger.info(f"✅ Created {len(all_chunks)} sentence-based chunks")
+        logger.info(f"Created {len(all_chunks)} sentence-based chunks")
         return all_chunks
 
     def get_stats(self) -> Dict:
@@ -436,15 +436,15 @@ class UnifiedContentIndexer:
                 "document_chunks": doc_count
             }
 
-            logger.info(f"📊 Unified Index Statistics:")
-            logger.info(f"  📄 Total chunks: {total_docs}")
-            logger.info(f"  🎥 Video chunks: {video_count}")
-            logger.info(f"  📝 Document chunks: {doc_count}")
+            logger.info(f"Unified Index Statistics:")
+            logger.info(f"   Total chunks: {total_docs}")
+            logger.info(f"   Video chunks: {video_count}")
+            logger.info(f"   Document chunks: {doc_count}")
 
             return stats
 
         except Exception as e:
-            logger.info(f"❌ Error getting stats: {e}")
+            logger.info(f"Error getting stats: {e}")
             return {}
 
     def delete_content_by_source(self, source_id: str, content_type: str = None) -> Dict:
@@ -467,7 +467,7 @@ class UnifiedContentIndexer:
             else:
                 filter_query = f"source_id eq '{source_id}'"
 
-            logger.info(f"🔍 Searching for content to delete: {filter_query}")
+            logger.info(f"Searching for content to delete: {filter_query}")
 
             # Search all documents related to source
             results = search_client.search(
@@ -488,7 +488,7 @@ class UnifiedContentIndexer:
             total_found = results.get_count()
 
             if not docs_to_delete:
-                logger.info(f"⚠️ No content found for deletion for source_id: {source_id}")
+                logger.info(f"No content found for deletion for source_id: {source_id}")
                 return {
                     "success": True,
                     "deleted_count": 0,
@@ -496,9 +496,9 @@ class UnifiedContentIndexer:
                     "message": "No content found for deletion"
                 }
 
-            logger.info(f"🗑️ Found {total_found} chunks for deletion:")
-            logger.info(f"  📄 Video chunks: {chunks_by_type['video']}")
-            logger.info(f"  📝 Document chunks: {chunks_by_type['document']}")
+            logger.info(f"Found {total_found} chunks for deletion:")
+            logger.info(f"   Video chunks: {chunks_by_type['video']}")
+            logger.info(f"   Document chunks: {chunks_by_type['document']}")
 
             # Perform deletion
             delete_results = search_client.delete_documents(docs_to_delete)
@@ -508,9 +508,9 @@ class UnifiedContentIndexer:
             failed_deletes = len(delete_results) - successful_deletes
 
             if failed_deletes > 0:
-                logger.info(f"⚠️ {failed_deletes} deletions failed")
+                logger.info(f"{failed_deletes} deletions failed")
 
-            logger.info(f"✅ Successfully deleted {successful_deletes} chunks for {source_id}")
+            logger.info(f"Successfully deleted {successful_deletes} chunks for {source_id}")
 
             # Update statistics
             self.get_stats()
@@ -526,7 +526,7 @@ class UnifiedContentIndexer:
             }
 
         except Exception as e:
-            logger.info(f"❌ Error deleting content: {e}")
+            logger.info(f"Error deleting content: {e}")
             return {
                 "success": False,
                 "deleted_count": 0,
@@ -551,7 +551,7 @@ class UnifiedContentIndexer:
     #
     #         # זיהוי סוג התוכן
     #         content_type = _detect_content_type_from_path(blob_path)
-    #         logger.info(f"🔄 מעדכן קובץ: {blob_path} (סוג: {content_type})")
+    #         logger.info(f"מעדכן קובץ: {blob_path} (סוג: {content_type})")
     #
     #         # קריאת הקובץ החדש
     #         if content_type == "video":
@@ -579,7 +579,7 @@ class UnifiedContentIndexer:
     #         existing_count = existing_results.get_count()
     #
     #         if existing_count == 0 and not force_update:
-    #             logger.info(f"⚠️ הקובץ {source_id} לא קיים באינדקס")
+    #             logger.info(f"הקובץ {source_id} לא קיים באינדקס")
     #             return {
     #                 "success": False,
     #                 "source_id": source_id,
@@ -588,7 +588,7 @@ class UnifiedContentIndexer:
     #
     #         # מחיקת הגרסה הישנה (אם קיימת)
     #         if existing_count > 0:
-    #             logger.info(f"🗑️ מוחק גרסה ישנה של {source_id} ({existing_count} chunks)")
+    #             logger.info(f"מוחק גרסה ישנה של {source_id} ({existing_count} chunks)")
     #             delete_result = self.delete_content_by_source(source_id, content_type)
     #             if not delete_result["success"]:
     #                 return {
@@ -599,11 +599,11 @@ class UnifiedContentIndexer:
     #                 }
     #
     #         # הוספת הגרסה החדשה
-    #         logger.info(f"➕ מוסיף גרסה חדשה של {source_id}")
+    #         logger.info(f"מוסיף גרסה חדשה של {source_id}")
     #         index_result = index_content_files([blob_path], create_new_index=False)
     #
     #         # בדיקה אם ההוספה הצליחה
-    #         if "✅" in index_result:
+    #         if "Indexing completed:" in index_result:
     #             # ספירת chunks חדשים
     #             new_results = search_client.search(
     #                 search_text="*",
@@ -613,8 +613,8 @@ class UnifiedContentIndexer:
     #             )
     #             new_count = new_results.get_count()
     #
-    #             logger.info(f"✅ עדכון הושלם בהצלחה עבור {source_id}")
-    #             logger.info(f"  📊 Chunks חדשים: {new_count}")
+    #             logger.info(f"עדכון הושלם בהצלחה עבור {source_id}")
+    #             logger.info(f"  Chunks חדשים: {new_count}")
     #
     #             return {
     #                 "success": True,
@@ -633,7 +633,7 @@ class UnifiedContentIndexer:
     #             }
     #
     #     except Exception as e:
-    #         logger.info(f"❌ שגיאה בעדכון קובץ: {e}")
+    #         logger.info(f"שגיאה בעדכון קובץ: {e}")
     #         return {
     #             "success": False,
     #             "source_id": source_id if 'source_id' in locals() else "unknown",
@@ -682,11 +682,11 @@ class UnifiedContentIndexer:
 
             sources_list = list(sources.values())
 
-            logger.info(f"📋 List of sources in index:")
-            logger.info(f"  📊 Total sources: {len(sources_list)}")
+            logger.info(f"List of sources in index:")
+            logger.info(f"   Total sources: {len(sources_list)}")
 
             for source in sources_list:
-                logger.info(f"  🔹 {source['source_id']} ({source['content_type']}) - {source['chunk_count']} chunks")
+                logger.info(f"   {source['source_id']} ({source['content_type']}) - {source['chunk_count']} chunks")
 
             return {
                 "success": True,
@@ -696,7 +696,7 @@ class UnifiedContentIndexer:
             }
 
         except Exception as e:
-            logger.info(f"❌ Error displaying sources: {e}")
+            logger.info(f"Error displaying sources: {e}")
             return {
                 "success": False,
                 "sources": [],
@@ -726,7 +726,7 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
     Parse video MD file from blob storage and convert to structured data format expected by indexer
     """
 
-    logger.info(f"📖 Reading video MD file from blob: {blob_path}")
+    logger.info(f"Reading video MD file from blob: {blob_path}")
 
     # Download content from blob to memory
     file_bytes = await blob_manager.download_to_memory(blob_path)
@@ -749,7 +749,7 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
 
 
     # Extract keywords
-    keywords_match = re.search(r'## 🔍 (?:Keywords|מילות מפתח)\n`(.+)`', content)
+    keywords_match = re.search(r'## (?:Keywords|מילות מפתח)\n`(.+)`', content)
     keywords = []
     if keywords_match:
         keywords_text = keywords_match.group(1)
@@ -759,7 +759,7 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
             keywords[-1] = keywords[-1].rstrip('`')
 
     # Extract topics
-    topics_match = re.search(r'## 🏷️ (?:Topics|נושאים)\n`(.+)`', content)
+    topics_match = re.search(r'## (?:Topics|נושאים)\n`(.+)`', content)
     topics = []
     if topics_match:
         topics_text = topics_match.group(1)
@@ -820,7 +820,7 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
         "transcript_segments": transcript_segments
     }
 
-    logger.info(f"✅ Parsed video MD file:")
+    logger.info(f"Parsed video MD file:")
     logger.info(f"  - Video ID: {video_id}")
     logger.info(f"  - Total Duration: {total_duration_str} ({total_duration_seconds} seconds)")
     logger.info(f"  - Segments: {len(transcript_segments)}")
@@ -865,7 +865,7 @@ async def parse_document_md_from_blob(blob_path: str, blob_manager: BlobManager)
     """
     Parse document MD file from blob storage and convert to document data format expected by indexer
     """
-    logger.info(f"📖 Reading document MD file from blob: {blob_path}")
+    logger.info(f"Reading document MD file from blob: {blob_path}")
 
     # Download content from blob to memory
     file_bytes = await blob_manager.download_to_memory(blob_path)
@@ -885,7 +885,7 @@ async def parse_document_md_from_blob(blob_path: str, blob_manager: BlobManager)
         "type": "markdown"
     }
 
-    logger.info(f"✅ Parsed document MD file")
+    logger.info(f"Parsed document MD file")
     return document_data
 
 
@@ -902,14 +902,14 @@ async def index_content_files(blob_paths: List[str], create_new_index: bool = Fa
         Success message after completion
     """
     try:
-        logger.info(f"🚀 Starting async indexing of {len(blob_paths)} files")
+        logger.info(f"Starting async indexing of {len(blob_paths)} files")
 
         indexer = UnifiedContentIndexer()
         blob_manager = BlobManager()
 
         # Create/initialize index
         if not indexer.create_index(create_new=create_new_index):
-            error_msg = "❌ Failed to create/initialize index"
+            error_msg = "Failed to create/initialize index"
             logger.error(error_msg)
             return error_msg
 
@@ -919,14 +919,14 @@ async def index_content_files(blob_paths: List[str], create_new_index: bool = Fa
         total_chunks = 0
         total_errors = 0
 
-        logger.info(f"📦 Processing in batches of {batch_size} files")
+        logger.info(f"Processing in batches of {batch_size} files")
 
         for i in range(0, len(blob_paths), batch_size):
             batch = blob_paths[i:i + batch_size]
             batch_num = (i // batch_size) + 1
             total_batches = (len(blob_paths) + batch_size - 1) // batch_size
 
-            logger.info(f"🔄 Processing batch {batch_num}/{total_batches} ({len(batch)} files)")
+            logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} files)")
 
             # Process batch with controlled concurrency
             batch_docs = []
@@ -938,15 +938,15 @@ async def index_content_files(blob_paths: List[str], create_new_index: bool = Fa
             # Collect results from batch
             for blob_path, result in zip(batch, batch_results):
                 if isinstance(result, Exception):
-                    logger.error(f"❌ Error processing {blob_path}: {result}")
+                    logger.error(f"Error processing {blob_path}: {result}")
                     total_errors += 1
                 elif result and len(result) > 0:
                     file_docs, content_type = result
                     batch_docs.extend(file_docs)
                     total_processed += 1
-                    logger.info(f"✅ Processed {blob_path} ({content_type}): {len(file_docs)} chunks")
+                    logger.info(f"Processed {blob_path} ({content_type}): {len(file_docs)} chunks")
                 else:
-                    logger.warning(f"⚠️ Skipped {blob_path} (empty or unsupported)")
+                    logger.warning(f"Skipped {blob_path} (empty or unsupported)")
                     total_errors += 1
 
             # Upload batch to index immediately (smaller uploads)
@@ -954,38 +954,38 @@ async def index_content_files(blob_paths: List[str], create_new_index: bool = Fa
                 try:
                     search_client = SearchClient(indexer.search_endpoint, INDEX_NAME, indexer.credential)
 
-                    logger.info(f"📤 Uploading batch {batch_num}: {len(batch_docs)} chunks")
+                    logger.info(f"Uploading batch {batch_num}: {len(batch_docs)} chunks")
                     results = search_client.upload_documents(batch_docs)
 
                     succeeded = sum(1 for r in results if r.succeeded)
                     failed = len(results) - succeeded
                     total_chunks += succeeded
 
-                    logger.info(f"✅ Batch {batch_num} uploaded: {succeeded} succeeded, {failed} failed")
+                    logger.info(f"Batch {batch_num} uploaded: {succeeded} succeeded, {failed} failed")
 
                     if failed > 0:
                         total_errors += failed
 
                 except Exception as e:
-                    logger.error(f"❌ Error uploading batch {batch_num}: {e}")
+                    logger.error(f"Error uploading batch {batch_num}: {e}")
                     total_errors += len(batch_docs)
 
             # Yield control between batches to prevent blocking
             await asyncio.sleep(0.2)
 
         # Final summary
-        logger.info(f"🎯 Indexing completed!")
-        logger.info(f"  📊 Files processed: {total_processed}/{len(blob_paths)}")
-        logger.info(f"  📊 Total chunks indexed: {total_chunks}")
-        logger.info(f"  📊 Errors: {total_errors}")
+        logger.info(f"Indexing completed!")
+        logger.info(f"   Files processed: {total_processed}/{len(blob_paths)}")
+        logger.info(f"   Total chunks indexed: {total_chunks}")
+        logger.info(f"   Errors: {total_errors}")
 
         # Display final index statistics
         indexer.get_stats()
 
-        return f"✅ Indexing completed: {total_processed} files processed, {total_chunks} chunks indexed, {total_errors} errors"
+        return f"Indexing completed: {total_processed} files processed, {total_chunks} chunks indexed, {total_errors} errors"
 
     except Exception as e:
-        error_msg = f"❌ Indexing failed: {str(e)}"
+        error_msg = f"Indexing failed: {str(e)}"
         logger.error(error_msg)
         return error_msg
 
@@ -1088,10 +1088,10 @@ def _extract_course_id_from_path(blob_path: str) -> str:
 
 async def main():
     """Main function - demonstrates usage with automatic type detection and new functions"""
-    logger.info("🚀 Unified Content Indexer - Videos + Documents")
+    logger.info("Unified Content Indexer - Videos + Documents")
     logger.info("=" * 60)
 
-    logger.info("\n🎯 Creating unified index with automatic file type detection")
+    logger.info("\nCreating unified index with automatic file type detection")
 
     # Define blob paths to process - type will be auto-detected from path
     blob_paths = [
@@ -1104,17 +1104,17 @@ async def main():
 
     # # בדיקת הפונקציות החדשות
     # logger.info("\n" + "=" * 60)
-    # logger.info("🧪 בדיקת פונקציות מחיקה ועדכון חדשות")
+    # logger.info("בדיקת פונקציות מחיקה ועדכון חדשות")
     # logger.info("=" * 60)
     #
     # indexer = UnifiedContentIndexer()
     #
     # # 1. הצגת סטטיסטיקות ראשוניות
-    # logger.info("\n📊 סטטיסטיקות ראשוניות:")
+    # logger.info("\nסטטיסטיקות ראשוניות:")
     # initial_stats = indexer.get_stats()
     #
     # # 2. הצגת רשימת מקורות
-    # logger.info("\n📋 רשימת מקורות באינדקס:")
+    # logger.info("\nרשימת מקורות באינדקס:")
     # sources_result = indexer.list_content_sources()
     #
     # if sources_result["success"] and sources_result["sources"]:
@@ -1122,43 +1122,43 @@ async def main():
     #     source_id = "2"
     #     content_type = "video"
     #
-    #     logger.info(f"\n🔍 פרטי המקור הראשון לבדיקה:")
-    #     logger.info(f"  📋 source_id: {source_id}")
-    #     logger.info(f"  📋 content_type: {content_type}")
+    #     logger.info(f"\nפרטי המקור הראשון לבדיקה:")
+    #     logger.info(f"  source_id: {source_id}")
+    #     logger.info(f"  content_type: {content_type}")
     #
-    #     logger.info(f"\n🗑️ בדיקת מחיקה עבור מקור: {source_id} (סוג: {content_type})")
+    #     logger.info(f"\nבדיקת מחיקה עבור מקור: {source_id} (סוג: {content_type})")
     #
     #     # ביצוע מחיקה ישירות
-    #     logger.info(f"  📄 מוחק סרטון עם ID 2...")
+    #     logger.info(f"  מוחק סרטון עם ID 2...")
     #
     #     # ביצוע מחיקה
     #     delete_result = indexer.delete_content_by_source(source_id, content_type)
-    #     logger.info(f"  🔄 תוצאת מחיקה: {delete_result['message']}")
+    #     logger.info(f"  תוצאת מחיקה: {delete_result['message']}")
     #
     #     # בדיקת סטטיסטיקות אחרי מחיקה
-    #     logger.info("\n📊 סטטיסטיקות אחרי מחיקה:")
+    #     logger.info("\nסטטיסטיקות אחרי מחיקה:")
     #     after_delete_stats = indexer.get_stats()
 
 
     #     # # סיכום הבדיקה
-    #     # logger.info("\n✅ סיכום בדיקת הפונקציות החדשות:")
-    #     # logger.info(f"  📄 Chunks התחלתיים: {initial_stats.get('total_chunks', 0)}")
-    #     # logger.info(f"  📄 Chunks אחרי מחיקה: {after_delete_stats.get('total_chunks', 0)}")
-    #     # logger.info(f"  📄 Chunks סופיים: {final_stats.get('total_chunks', 0)}")
+    #     # logger.info("\nסיכום בדיקת הפונקציות החדשות:")
+    #     # logger.info(f"  Chunks התחלתיים: {initial_stats.get('total_chunks', 0)}")
+    #     # logger.info(f"  Chunks אחרי מחיקה: {after_delete_stats.get('total_chunks', 0)}")
+    #     # logger.info(f"  Chunks סופיים: {final_stats.get('total_chunks', 0)}")
     #     #
     #     # if delete_result["success"]:
-    #     #     logger.info("  ✅ פונקציית מחיקה עובדת תקין")
+    #     #     logger.info("  פונקציית מחיקה עובדת תקין")
     #     # else:
-    #     #     logger.info("  ❌ פונקציית מחיקה נכשלה")
+    #     #     logger.info("  פונקציית מחיקה נכשלה")
     #
     #     # if update_result["success"]:
-    #     #     logger.info("  ✅ פונקציית עדכון עובדת תקין")
+    #     #     logger.info("  פונקציית עדכון עובדת תקין")
     #     # else:
-    #     #     logger.info("  ❌ פונקציית עדכון נכשלה")
+    #     #     logger.info("  פונקציית עדכון נכשלה")
     #
     # else:
-    #     logger.info("⚠️ לא נמצאו מקורות באינדקס לבדיקה")
-    #     logger.info("� הרץ קודם את הפונקציה index_content_files כדי להוסיף תוכן לאינדקס")
+    #     logger.info("לא נמצאו מקורות באינדקס לבדיקה")
+    #     logger.info("הרץ קודם את הפונקציה index_content_files כדי להוסיף תוכן לאינדקס")
 
 
 if __name__ == "__main__":
