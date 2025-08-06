@@ -202,23 +202,24 @@ class ContentSummarizer:
         הצגת הקורס:
         """
 
-    def parse_video_md_file(self, md_file_path: str) -> Dict:
+    async def parse_video_md_file_from_blob(self, blob_path: str) -> Dict:
         """
-        Parse video.md file into its specific parts
+        Parse video.md file from blob storage into its specific parts
 
         Args:
-            md_file_path: Path to video.md file
+            blob_path: Path to video.md file in blob storage
 
         Returns:
             Dictionary with different parts of the file
         """
-        logger.info(f"Parsing video MD file: {md_file_path}")
+        logger.info(f"Parsing video MD file from blob: {blob_path}")
 
-        if not os.path.exists(md_file_path):
-            raise FileNotFoundError(f"File not found: {md_file_path}")
+        # Download file from blob storage
+        file_bytes = await self.blob_manager.download_to_memory(blob_path)
+        if not file_bytes:
+            raise FileNotFoundError(f"File not found in blob: {blob_path}")
 
-        with open(md_file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        content = file_bytes.decode('utf-8')
 
         # Search for specific parts
         subject_type = None
@@ -439,20 +440,23 @@ class ContentSummarizer:
                 logger.info(f"Cannot identify file type for: {blob_path}")
                 return None
 
-            # Download file from blob
-            temp_file_path = f"temp_{os.path.basename(blob_path)}"
-
-            if not await self.blob_manager.download_file(blob_path, temp_file_path):
+            # Download file directly to memory from blob
+            file_bytes = await self.blob_manager.download_to_memory(blob_path)
+            if not file_bytes:
                 logger.info(f"Failed to download file from blob: {blob_path}")
                 return None
+
+            # Convert to text
+            content = file_bytes.decode('utf-8')
+            temp_file_path = None  # No temp file needed
 
             try:
                 # If it's a video file - use advanced parsing
                 if content_type == "video":
                     logger.info("Video file detected - using enhanced parsing and summarization")
 
-                    # Parse file into different parts
-                    parsed_data = self.parse_video_md_file(temp_file_path)
+                    # Parse file content directly from blob
+                    parsed_data = await self.parse_video_md_file_from_blob(blob_path)
 
                     # Check that transcript exists
                     if not parsed_data.get("full_transcript"):
@@ -470,9 +474,6 @@ class ContentSummarizer:
                 # If it's a regular document - standard handling
                 else:
                     logger.info("Document file - using standard processing")
-                    # Read file
-                    with open(temp_file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
 
                     if not content.strip():
                         logger.info(f"File is empty")
@@ -496,8 +497,8 @@ class ContentSummarizer:
                     return None
 
             finally:
-                # Delete temporary file
-                if os.path.exists(temp_file_path):
+                # Delete temporary file (only if it was created)
+                if temp_file_path and os.path.exists(temp_file_path):
                     os.remove(temp_file_path)
 
         except Exception as e:
@@ -815,38 +816,6 @@ class ContentSummarizer:
             logger.info(f" Error in course summarization: {str(e)}")
             return None
 
-    def save_summary_to_file(self, summary: str, original_file_path: str, output_dir: str = "summaries") -> str:
-        """
-        Save summary to file
-
-        Args:
-            summary: Summary to save
-            original_file_path: Original file path
-            output_dir: Output directory
-
-        Returns:
-            Path of saved file
-        """
-        # Create output directory
-        os.makedirs(output_dir, exist_ok=True)
-
-        # Create summary filename
-        base_name = os.path.splitext(os.path.basename(original_file_path))[0]
-        summary_filename = f"{base_name}_summary.md"
-        summary_path = os.path.join(output_dir, summary_filename)
-
-        try:
-            # Save summary
-            with open(summary_path, 'w', encoding='utf-8') as f:
-                f.write(summary)
-
-            logger.info(f" Summary saved to: {summary_path}")
-            return summary_path
-
-        except Exception as e:
-            error_msg = f"Error saving summary: {str(e)}"
-            logger.info(f" {error_msg}")
-            return ""
 
 
 async def main():
