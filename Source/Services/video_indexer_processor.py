@@ -1,10 +1,10 @@
-import requests
+import httpx
 import time
 import os
 import asyncio
 from datetime import datetime
 from typing import Optional, Dict, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from Config.config import (
     VIDEO_INDEXER_ACCOUNT_ID,
     VIDEO_INDEXER_LOCATION,
@@ -64,10 +64,10 @@ class VideoIndexerManager:
             logger.info(f"Error initializing VideoIndexer client: {e}")
             self._vi_client = None
 
-    def get_valid_token(self):
+    async def get_valid_token(self):
         """Get valid token - automatically refreshes if needed"""
         if self._should_refresh_token():
-            self._refresh_token()
+            await self._refresh_token()
 
         return self._access_token
 
@@ -81,9 +81,9 @@ class VideoIndexerManager:
 
         # Refresh 5 minutes before expiry
         refresh_time = self._token_expiry - timedelta(minutes=5)
-        return datetime.utcnow() >= refresh_time
+        return datetime.now(timezone.utc) >= refresh_time
 
-    def _refresh_token(self):
+    async def _refresh_token(self):
         """Refresh Video Indexer token"""
         if not self._vi_client or not self._consts:
             logger.info("VideoIndexer client not available, using fixed token")
@@ -103,7 +103,7 @@ class VideoIndexerManager:
 
                 logger.info(f"Token refreshed successfully. Length: {len(vi_token)}")
                 if self._token_expiry:
-                    current_time = datetime.utcnow()
+                    current_time = datetime.now(timezone.utc)
                     logger.info(f"Current time: {current_time}")
                     logger.info(f"Expires at: {self._token_expiry}")
             else:
@@ -115,21 +115,21 @@ class VideoIndexerManager:
     def _extract_token_expiry(self, token):
         try:
             # Instead of decoding the token, simply set it as valid for one hour from now
-            self._token_expiry = datetime.utcnow() + timedelta(hours=1)
+            self._token_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
             logger.info(f"Token expiry time (estimated): {self._token_expiry}")
 
         except Exception as e:
             logger.info(f"Error setting expiry time: {e}")
 
-    def _get_params_with_token(self, additional_params=None):
+    async def _get_params_with_token(self, additional_params=None):
         """Get parameters with access token."""
-        token = self.get_valid_token()
+        token = await self.get_valid_token()
         params = {"accessToken": token}
         if additional_params:
             params.update(additional_params)
         return params
 
-    def upload_video_from_url(self, video_sas_url: str, video_name: str) -> str:
+    async def upload_video_from_url(self, video_sas_url: str, video_name: str) -> str:
         """
         Upload video to Video Indexer using SAS URL
 
@@ -141,7 +141,7 @@ class VideoIndexerManager:
 
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos"
 
-        params = self._get_params_with_token({
+        params = await self._get_params_with_token({
             "name": video_name,
             "privacy": "Private",
             "videoUrl": video_sas_url,
@@ -152,19 +152,20 @@ class VideoIndexerManager:
 
         try:
             logger.info(f"Sending request to Video Indexer...")
-            resp = requests.post(url, params=params, timeout=30)
-            resp.raise_for_status()
+            async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+                resp = await client.post(url, params=params)
+                resp.raise_for_status()
 
-            data = resp.json()
-            video_id = data.get("id") or data.get("videoId")
+                data = resp.json()
+                video_id = data.get("id") or data.get("videoId")
 
-            if not video_id:
-                raise RuntimeError(f"Upload failed: {data}")
+                if not video_id:
+                    raise RuntimeError(f"Upload failed: {data}")
 
-            logger.info(f"Uploaded successfully, video ID: {video_id}")
-            return video_id
+                logger.info(f"Uploaded successfully, video ID: {video_id}")
+                return video_id
 
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             raise RuntimeError(f"Error uploading video: {str(e)}")
 
     async def wait_for_indexing(self, video_id: str, interval: int = 10, max_wait_minutes: int = 600) -> Dict:
@@ -175,30 +176,31 @@ class VideoIndexerManager:
         start_time = time.time()
         max_wait_seconds = max_wait_minutes * 60
 
-        while True:
-            try:
-                params = self._get_params_with_token()
-                resp = requests.get(url, params=params)
-                resp.raise_for_status()
-                data = resp.json()
+        async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+            while True:
+                try:
+                    params = await self._get_params_with_token()
+                    resp = await client.get(url, params=params)
+                    resp.raise_for_status()
+                    data = await resp.json()
 
-                state = data.get("state")
-                logger.info(f"Processing state: {state}")
+                    state = data.get("state")
+                    logger.info(f"Processing state: {state}")
 
-                if state == "Processed":
-                    logger.info("Processing completed!")
-                    return data
-                elif state == "Failed":
-                    raise RuntimeError("Video processing failed")
+                    if state == "Processed":
+                        logger.info("Processing completed!")
+                        return data
+                    elif state == "Failed":
+                        raise RuntimeError("Video processing failed")
 
-                elapsed_time = time.time() - start_time
-                if elapsed_time > max_wait_seconds:
-                    raise TimeoutError(f"Video processing took more than {max_wait_minutes} minutes")
+                    elapsed_time = time.time() - start_time
+                    if elapsed_time > max_wait_seconds:
+                        raise TimeoutError(f"Video processing took more than {max_wait_minutes} minutes")
 
-                await asyncio.sleep(interval)
+                    await asyncio.sleep(interval)
 
-            except requests.exceptions.RequestException as e:
-                raise RuntimeError(f"Error checking processing status: {str(e)}")
+                except httpx.RequestError as e:
+                    raise RuntimeError(f"Error checking processing status: {str(e)}")
 
     def extract_transcript_with_timestamps(self, index_json: Dict) -> List[Dict]:
         """Extract transcript with timestamps"""
@@ -282,6 +284,7 @@ class VideoIndexerManager:
         logger.info(
             f"Merging segments: {len(segments)} -> {len(merged_segments)} (max {max_duration_seconds} seconds)")
         return merged_segments
+
     #
     # def create_textual_summary(self, video_id: str, deployment_name: str = "gpt-4o") -> str:
     #     """Create textual summary using GPT"""
@@ -330,19 +333,21 @@ class VideoIndexerManager:
     #             logger.info(f"Summary state: {state} - waiting...")
     #             await asyncio.sleep(10)
 
-    def delete_video(self, video_id: str) -> bool:
+
+    async def delete_video(self, video_id: str) -> bool:
         """Delete video from Video Indexer to clean up unnecessary containers"""
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}"
 
         try:
-            params = self._get_params_with_token()
-            resp = requests.delete(url, params=params, timeout=30)
-            resp.raise_for_status()
+            params = await self._get_params_with_token()
+            async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+                resp = await client.delete(url, params=params)
+                resp.raise_for_status()
 
-            logger.info(f"Video deleted from Video Indexer: {video_id}")
-            return True
+                logger.info(f"Video deleted from Video Indexer: {video_id}")
+                return True
 
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             logger.info(f"Error deleting video from Video Indexer: {str(e)}")
             return False
 
@@ -430,7 +435,8 @@ class VideoIndexerManager:
         md_content.append("")
 
         # Metadata
-        md_content.append("## 📊 פרטי הוידאו")
+        md_content.append("## פרטי הוידאו")
+        md_content.append(f"- **שם הוידאו**: {structured_data.get('name', 'לא זמין')}")
         md_content.append(f"- **מזהה וידאו**: {structured_data.get('id', 'לא זמין')}")
         md_content.append(f"- **משך זמן**: {structured_data.get('duration', 'לא זמין')}")
         md_content.append(f"- **שפה**: {structured_data.get('language', 'לא זמין')}")
@@ -441,21 +447,21 @@ class VideoIndexerManager:
         # Keywords
         keywords = structured_data.get('keywords', [])
         if keywords:
-            md_content.append("## 🔍 מילות מפתח")
+            md_content.append("## מילות מפתח")
             md_content.append(", ".join(f"`{kw}`" for kw in keywords))
             md_content.append("")
 
         # Topics
         topics = structured_data.get('topics', [])
         if topics:
-            md_content.append("## 🏷️ נושאים")
+            md_content.append("## נושאים")
             md_content.append(", ".join(f"`{topic}`" for topic in topics))
             md_content.append("")
 
         # OCR
         ocr_texts = structured_data.get('ocr', [])
         if ocr_texts:
-            md_content.append("## 👁️ טקסט שחולץ מהוידאו (OCR)")
+            md_content.append("## טקסט שחולץ מהוידאו (OCR)")
             for i, ocr_text in enumerate(ocr_texts, 1):
                 md_content.append(f"{i}. {ocr_text}")
             md_content.append("")
@@ -483,32 +489,33 @@ class VideoIndexerManager:
         #     md_content.append(summary_text)
         #     md_content.append("")
 
-        # Description
-        if structured_data.get('description'):
-            md_content.append("## תיאור")
-            md_content.append(structured_data['description'])
-            md_content.append("")
-
-        # Full transcript
-        md_content.append("## טרנסקריפט מלא")
-        md_content.append(structured_data.get('full_transcript', 'Transcript not available'))
-        md_content.append("")
-
-        # Transcript with timestamps
-        transcript_segments = structured_data.get('transcript_segments', [])
-        if transcript_segments:
-            md_content.append("## טרנסקריפט עם חותמות זמן")
-            md_content.append("")
-
-            for segment in transcript_segments:
-                start_time = segment.get('start_time', '00:00:00')
-                text = segment.get('text', '')
-                md_content.append(f"**[{start_time}]** {text}")
+            # Description
+            if structured_data.get('description'):
+                md_content.append("## תיאור")
+                md_content.append(structured_data['description'])
                 md_content.append("")
 
-        return "\n".join(md_content)
+            # Full transcript
+            md_content.append("## טרנסקריפט מלא")
+            md_content.append(structured_data.get('full_transcript', 'Transcript not available'))
+            md_content.append("")
 
-    async def process_video_to_md(self, course_id: str, section_id: str, file_id: int, video_name: str, video_url: str,
+            # Transcript with timestamps
+            transcript_segments = structured_data.get('transcript_segments', [])
+            if transcript_segments:
+                md_content.append("## טרנסקריפט עם חותמות זמן")
+                md_content.append("")
+
+                for segment in transcript_segments:
+                    start_time = segment.get('start_time', '00:00:00')
+                    text = segment.get('text', '')
+                    md_content.append(f"**[{start_time}]** {text}")
+                    md_content.append("")
+
+            return "\n".join(md_content)
+
+    async def process_video_to_md(self, course_id: str, section_id: str, file_id: int, video_name: str,
+                                  video_url: str,
                                   merge_segments_duration: Optional[int] = 30) -> str | None:
         """
         NON-BLOCKING: Process video from blob storage to create markdown file
@@ -536,7 +543,7 @@ class VideoIndexerManager:
 
         # Create SAS URL for video from raw-data container
         logger.info(f"Creating SAS URL for video from raw-data container: {video_url}")
-        video_sas_url = blob_manager_read.generate_sas_url(video_url, hours=4)
+        video_sas_url = await blob_manager_read.generate_sas_url(video_url, hours=4)
 
         if not video_sas_url:
             logger.info(f"Failed to create SAS URL for video: {video_url}")
@@ -548,7 +555,7 @@ class VideoIndexerManager:
             logger.info(f"Uploading video to Video Indexer: {video_name}")
 
             # Upload video to Video Indexer (this is quick)
-            video_id = self.upload_video_from_url(video_sas_url, video_name)
+            video_id = await self.upload_video_from_url(video_sas_url, video_name)
 
             # Create target path immediately
             target_blob_path = f"{course_id}/{section_id}/Videos_md/{file_id}.md"
@@ -615,7 +622,6 @@ class VideoIndexerManager:
                 "full_transcript": " ".join([seg["text"] for seg in transcript_segments]),
                 "segment_start_times": [seg["start_time"] for seg in transcript_segments],
                 "segment_start_seconds": [seg["start_seconds"] for seg in transcript_segments]
-                # "summary_text": summary_text
             }
 
             # Convert to markdown
@@ -629,7 +635,7 @@ class VideoIndexerManager:
             blob_manager_write = BlobManager(container_name="processeddata")
 
             logger.info(f"Uploading final result to processeddata container: {target_blob_path}")
-            success = blob_manager_write.upload_text_to_blob(
+            success = await blob_manager_write.upload_text_to_blob(
                 text_content=md_content,
                 blob_name=target_blob_path
             )
@@ -641,7 +647,7 @@ class VideoIndexerManager:
 
             # Cleanup: delete video from Video Indexer
             logger.info("Cleaning up unnecessary containers...")
-            self.delete_video(video_id)
+            await self.delete_video(video_id)
 
         except Exception as e:
             logger.info(f"Background video processing failed for {video_name}: {str(e)}")
