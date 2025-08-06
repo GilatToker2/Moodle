@@ -182,7 +182,7 @@ class VideoIndexerManager:
                     params = await self._get_params_with_token()
                     resp = await client.get(url, params=params)
                     resp.raise_for_status()
-                    data = await resp.json()
+                    data = resp.json()
 
                     state = data.get("state")
                     logger.info(f"Processing state: {state}")
