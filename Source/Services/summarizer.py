@@ -442,7 +442,7 @@ class ContentSummarizer:
             # Download file from blob
             temp_file_path = f"temp_{os.path.basename(blob_path)}"
 
-            if not self.blob_manager.download_file(blob_path, temp_file_path):
+            if not await self.blob_manager.download_file(blob_path, temp_file_path):
                 logger.info(f"Failed to download file from blob: {blob_path}")
                 return None
 
@@ -487,7 +487,7 @@ class ContentSummarizer:
                     return None
 
                 # Save summary to blob
-                blob_summary_path = self._save_summary_to_blob(summary, blob_path)
+                blob_summary_path = await self._save_summary_to_blob(summary, blob_path)
                 if blob_summary_path:
                     logger.info(f"Summary saved to blob: {blob_summary_path}")
                     return blob_summary_path
@@ -504,7 +504,7 @@ class ContentSummarizer:
             logger.info(f"Error processing file: {str(e)}")
             return None
 
-    def _save_summary_to_blob(self, summary: str, original_blob_path: str) -> str:
+    async def _save_summary_to_blob(self, summary: str, original_blob_path: str) -> str:
         """
         Save summary to blob in structure CourseID/SectionID/file_summaries/FileID.md
 
@@ -538,7 +538,7 @@ class ContentSummarizer:
             logger.info(f"📤 Saving summary to blob: {summary_blob_path}")
 
             # Save to blob
-            success = self.blob_manager.upload_text_to_blob(
+            success = await self.blob_manager.upload_text_to_blob(
                 text_content=summary,
                 blob_name=summary_blob_path,
                 container=CONTAINER_NAME
@@ -583,7 +583,7 @@ class ContentSummarizer:
             blob_manager = BlobManager()
 
             # Get list of all files in container
-            all_files = blob_manager.list_files()
+            all_files = await blob_manager.list_files()
 
             # Filter files in specific path
             section_files = [f for f in all_files if f.startswith(full_blob_path + "/") and f.endswith(".md")]
@@ -605,7 +605,7 @@ class ContentSummarizer:
 
                 try:
                     # Download file directly to memory
-                    file_bytes = blob_manager.download_to_memory(file_path)
+                    file_bytes = await blob_manager.download_to_memory(file_path)
 
                     if file_bytes:
                         # Convert to text
@@ -669,7 +669,7 @@ class ContentSummarizer:
 
             logger.info(f"Saving section summary to blob: {summary_blob_path}")
 
-            success = blob_manager.upload_text_to_blob(
+            success = await blob_manager.upload_text_to_blob(
                 text_content=section_summary,
                 blob_name=summary_blob_path
             )
@@ -713,7 +713,7 @@ class ContentSummarizer:
             blob_manager = BlobManager()
 
             # Get list of all files in container
-            all_files = blob_manager.list_files()
+            all_files = await blob_manager.list_files()
 
             # Filter files in section_summaries folder
             sections_files = [f for f in all_files if f.startswith(full_blob_path + "/") and f.endswith(".md")]
@@ -735,7 +735,7 @@ class ContentSummarizer:
 
                 try:
                     # Download file directly to memory
-                    file_bytes = blob_manager.download_to_memory(file_path)
+                    file_bytes = await blob_manager.download_to_memory(file_path)
 
                     if file_bytes:
                         # Convert to text
@@ -799,7 +799,7 @@ class ContentSummarizer:
 
             logger.info(f" Saving course summary to blob: {summary_blob_path}")
 
-            success = blob_manager.upload_text_to_blob(
+            success = await blob_manager.upload_text_to_blob(
                 text_content=course_summary,
                 blob_name=summary_blob_path
             )
