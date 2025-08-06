@@ -10,7 +10,7 @@ Required config.py settings:
 - VIDEO_INDEXER_ACCOUNT_ID
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -316,7 +316,7 @@ async def process_video_file(request: ProcessVideoRequest):
     },
     tags=["Indexing"]
 )
-async def insert_to_index(request: IndexRequest):
+async def insert_to_index(request: IndexRequest, background_tasks: BackgroundTasks):
     """
     Index MD Files from Blob Storage to Search Index
 
@@ -366,15 +366,16 @@ async def insert_to_index(request: IndexRequest):
             if not blob_path.lower().endswith('.md'):
                 raise HTTPException(status_code=400, detail=f"Only MD files are supported: {blob_path}")
 
-        # Use the unified_indexer to process files from blob storage
-        result = await index_content_files(request.blob_paths, create_new_index=request.create_new_index)
+        # Add indexing task to background tasks - no await needed
+        background_tasks.add_task(index_content_files, request.blob_paths, request.create_new_index)
 
+        # Return immediately
         return {
-            "message": result,
+            "message": f"Indexing started for {len(request.blob_paths)} files. Processing continues in background. Check logs for progress.",
             "create_new_index": request.create_new_index
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error indexing files: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error starting indexing: {str(e)}")
 
 @app.post(
     "/delete_from_index",
