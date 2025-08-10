@@ -256,12 +256,11 @@ class DeleteContentResponse(BaseModel):
 
 class DetectSubjectRequest(BaseModel):
     course_path: str
-    max_vid: Optional[int] = 5
-    max_doc: Optional[int] = 5
 
 
 class DetectSubjectResponse(BaseModel):
     success: bool
+    subject_name: str
     subject_type: str
 
 
@@ -823,41 +822,38 @@ async def detect_subject_type(request: DetectSubjectRequest):
     Detect Subject Type from Course Content
 
     **Function Description:**
-    Analyzes course content (videos and documents) to automatically determine if the subject is mathematical/technical or humanities-based.
+    Analyzes course content (videos and documents) to automatically determine the subject name and type using LLM analysis.
+
+    **What the Function Does:**
+    • Scans all MD files in the specified course path
+    • Limits analysis to prevent token overflow (max 5 videos, 10 documents, 10K chars per file)
+    • Sends content to LLM for intelligent subject identification
+    • Returns both subject name and classification
 
     **Subject Classification:**
     - **מתמטי**: Mathematics, Physics, Computer Science, Engineering, Statistics, Logic, Algorithms
     - **הומני**: Literature, History, Philosophy, Psychology, Sociology, Arts, Languages
 
-    **Parameters:**
-    - **max_vid**: Maximum number of video files to analyze (default: 5). This limits processing time and costs while usually providing sufficient data for accurate classification.
-    - **max_doc**: Maximum number of document files to analyze (default: 5). This limits processing time and costs while usually providing sufficient data for accurate classification.
-
     **Request Body Example:**
     ```json
     {
-        "course_path": "CS101",
-        "max_vid": 5,
-        "max_doc": 5
+        "course_path": "CS101"
     }
     ```
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
+    - subject_name: Name of the detected subject (e.g., "מדעי המחשב")
     - subject_type: Detected subject type ("מתמטי", "הומני", or "לא זוהה")
     """
     try:
         logger.info(f"Starting subject type detection for course: {request.course_path}")
 
         # Call the subject detection function
-        subject_type = detect_subject_from_course(
-            course_path=request.course_path,
-            max_vid=request.max_vid,
-            max_doc=request.max_doc
-        )
+        result = await detect_subject_from_course(request.course_path)
 
         # Check if detection was successful
-        if subject_type == "לא זוהה":
+        if result["name"] == "לא זוהה" or result["type"] == "לא זוהה":
             # Check if it's because no files were found
             raise HTTPException(
                 status_code=404,
@@ -866,7 +862,8 @@ async def detect_subject_type(request: DetectSubjectRequest):
 
         return DetectSubjectResponse(
             success=True,
-            subject_type=subject_type,
+            subject_name=result["name"],
+            subject_type=result["type"]
         )
 
     except HTTPException:
