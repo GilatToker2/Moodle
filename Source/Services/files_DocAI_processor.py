@@ -8,27 +8,28 @@ from Config.config import AZURE_FORM_RECOGNIZER_KEY, AZURE_FORM_RECOGNIZER_ENDPO
 from Config.logging_config import setup_logging
 logger = setup_logging()
 
-# Use async client
-client = DocumentIntelligenceClient(
-    endpoint=AZURE_FORM_RECOGNIZER_ENDPOINT,
-    credential=AzureKeyCredential(AZURE_FORM_RECOGNIZER_KEY)
-)
-
-
 async def process_single_document(file_path: str) -> str | None:
     """
     Accepts *any* document path (.doc, .docx, .pdf, .pptx, .png, …)
     and returns a Markdown string (or None if it failed).
     """
     if not os.path.exists(file_path):
-        logger.info(f"File not found: {file_path}")
+        logger.error(f"File not found: {file_path}")
         return None
 
     work_path = file_path
     logger.info(f"Processing {work_path} → MD File")
 
+    # Create client per request to avoid connection issues
+    client = None
     try:
-        # use Azure Document Intelligence
+        # Create new client for this request
+        client = DocumentIntelligenceClient(
+            endpoint=AZURE_FORM_RECOGNIZER_ENDPOINT,
+            credential=AzureKeyCredential(AZURE_FORM_RECOGNIZER_KEY)
+        )
+
+        # Use Azure Document Intelligence with proper async context manager
         async with client:
             with open(work_path, "rb") as f:
                 poller = await client.begin_analyze_document(
@@ -42,8 +43,15 @@ async def process_single_document(file_path: str) -> str | None:
             return md
 
     except Exception as e:
-        logger.info(f"Error in Azure DI for {work_path}: {e}")
+        logger.error(f"Error in Azure DI for {work_path}: {e}")
         return None
+    finally:
+        # Ensure client is properly closed
+        if client:
+            try:
+                await client.close()
+            except Exception as e:
+                logger.warning(f"Error closing client: {e}")
 
 
 async def process_document_from_memory(file_bytes: bytes) -> str | None:
@@ -56,13 +64,21 @@ async def process_document_from_memory(file_bytes: bytes) -> str | None:
     Returns:
         Markdown string or None if failed
     """
+    # Create client per request to avoid connection issues
+    client = None
     try:
         logger.info(f"Processing document from memory ({len(file_bytes)} bytes) → MD")
 
         # Create BytesIO object from bytes
         file_buffer = BytesIO(file_bytes)
 
-        # Use Azure Document Intelligence directly with the buffer
+        # Create new client for this request
+        client = DocumentIntelligenceClient(
+            endpoint=AZURE_FORM_RECOGNIZER_ENDPOINT,
+            credential=AzureKeyCredential(AZURE_FORM_RECOGNIZER_KEY)
+        )
+
+        # Use Azure Document Intelligence with proper async context manager
         async with client:
             poller = await client.begin_analyze_document(
                 "prebuilt-layout",
@@ -75,8 +91,15 @@ async def process_document_from_memory(file_bytes: bytes) -> str | None:
             return md
 
     except Exception as e:
-        logger.info(f"Error in Azure DI for memory buffer: {e}")
+        logger.error(f"Error in Azure DI for memory buffer: {e}")
         return None
+    finally:
+        # Ensure client is properly closed
+        if client:
+            try:
+                await client.close()
+            except Exception as e:
+                logger.warning(f"Error closing client: {e}")
 
 
 async def document_to_markdown(course_id: str, section_id: str, file_id: int, document_name: str, document_url: str) -> str | None:
