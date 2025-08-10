@@ -20,8 +20,6 @@ async def process_single_document(file_path: str) -> str | None:
     work_path = file_path
     logger.info(f"Processing {work_path} → MD File")
 
-    # Create client per request to avoid connection issues
-    client = None
     try:
         # Create new client for this request
         client = DocumentIntelligenceClient(
@@ -45,42 +43,29 @@ async def process_single_document(file_path: str) -> str | None:
     except Exception as e:
         logger.error(f"Error in Azure DI for {work_path}: {e}")
         return None
-    finally:
-        # Ensure client is properly closed
-        if client:
-            try:
-                await client.close()
-            except Exception as e:
-                logger.warning(f"Error closing client: {e}")
 
 
-async def process_document_from_memory(file_bytes: bytes) -> str | None:
+async def process_document_from_memory(file_bytes: bytes, di_client=None) -> str | None:
     """
     Processes document bytes directly using Azure Document Intelligence.
 
     Args:
         file_bytes: The document content as bytes
+        di_client: Shared Document Intelligence client (preferred) or None to create per-request
 
     Returns:
         Markdown string or None if failed
     """
-    # Create client per request to avoid connection issues
-    client = None
-    try:
-        logger.info(f"Processing document from memory ({len(file_bytes)} bytes) → MD")
+    logger.info(f"Processing document from memory ({len(file_bytes)} bytes) → MD")
 
-        # Create BytesIO object from bytes
-        file_buffer = BytesIO(file_bytes)
+    # Create BytesIO object from bytes
+    file_buffer = BytesIO(file_bytes)
 
-        # Create new client for this request
-        client = DocumentIntelligenceClient(
-            endpoint=AZURE_FORM_RECOGNIZER_ENDPOINT,
-            credential=AzureKeyCredential(AZURE_FORM_RECOGNIZER_KEY)
-        )
-
-        # Use Azure Document Intelligence with proper async context manager
-        async with client:
-            poller = await client.begin_analyze_document(
+    # Use shared client if provided, otherwise create per-request (fallback)
+    if di_client:
+        # Preferred: use shared app-scoped client (better pooling + lower latency)
+        try:
+            poller = await di_client.begin_analyze_document(
                 "prebuilt-layout",
                 file_buffer,
                 content_type=None,  # let the service detect type
@@ -89,20 +74,35 @@ async def process_document_from_memory(file_bytes: bytes) -> str | None:
             result = await poller.result()
             md = result.content
             return md
+        except Exception as e:
+            logger.error(f"Error in Azure DI for memory buffer: {e}")
+            return None
+    else:
+        # Fallback: create client per request when lifecycle management isn't available
+        # or was causing "unclosed session/transport closed" issues
+        try:
+            client = DocumentIntelligenceClient(
+                endpoint=AZURE_FORM_RECOGNIZER_ENDPOINT,
+                credential=AzureKeyCredential(AZURE_FORM_RECOGNIZER_KEY)
+            )
 
-    except Exception as e:
-        logger.error(f"Error in Azure DI for memory buffer: {e}")
-        return None
-    finally:
-        # Ensure client is properly closed
-        if client:
-            try:
-                await client.close()
-            except Exception as e:
-                logger.warning(f"Error closing client: {e}")
+            async with client:
+                poller = await client.begin_analyze_document(
+                    "prebuilt-layout",
+                    file_buffer,
+                    content_type=None,  # let the service detect type
+                    output_content_format="markdown"
+                )
+                result = await poller.result()
+                md = result.content
+                return md
+
+        except Exception as e:
+            logger.error(f"Error in Azure DI for memory buffer: {e}")
+            return None
 
 
-async def document_to_markdown(course_id: str, section_id: str, file_id: int, document_name: str, document_url: str) -> str | None:
+async def document_to_markdown(course_id: str, section_id: str, file_id: int, document_name: str, document_url: str, di_client=None) -> str | None:
     """
     Streamlined: Downloads document from blob → processes in memory → uploads markdown.
     No temp files or disk I/O.
@@ -139,8 +139,8 @@ async def document_to_markdown(course_id: str, section_id: str, file_id: int, do
 
     logger.info(f"Processing file in memory: {document_name}")
 
-    # Step 2: Process document directly from memory
-    md_content = await process_document_from_memory(file_bytes)
+    # Step 2: Process document directly from memory using shared client
+    md_content = await process_document_from_memory(file_bytes, di_client)
     if not md_content:
         logger.info(f"Failed to process file: {document_name}")
         return None

@@ -16,7 +16,10 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import uvicorn
 from contextlib import asynccontextmanager
+from azure.ai.documentintelligence.aio import DocumentIntelligenceClient
+from azure.core.credentials import AzureKeyCredential
 from Config.logging_config import setup_logging
+from Config.config import AZURE_FORM_RECOGNIZER_KEY, AZURE_FORM_RECOGNIZER_ENDPOINT
 # Import modules
 from Source.Services.files_DocAI_processor import document_to_markdown
 from Source.Services.summarizer import ContentSummarizer
@@ -28,13 +31,16 @@ from Source.Services.blob_manager import BlobManager
 # Initialize logger
 logger = setup_logging()
 
+
 # Convenience function for backward compatibility
 def debug_log(message):
     """Write debug message using proper logging"""
     logger.debug(message)
 
+
 # Global variables to store service instances
 app_services = {}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,6 +52,15 @@ async def lifespan(app: FastAPI):
     logger.info("App is starting - Initializing services...")
 
     try:
+        # Initialize Azure Document Intelligence Client
+        logger.info("Initializing Azure Document Intelligence Client...")
+        di_client = DocumentIntelligenceClient(
+            endpoint=AZURE_FORM_RECOGNIZER_ENDPOINT,
+            credential=AzureKeyCredential(AZURE_FORM_RECOGNIZER_KEY)
+        )
+        app_services["di_client"] = di_client
+        logger.info("Document Intelligence Client initialized successfully")
+
         # Initialize Azure Blob Storage Manager
         logger.info("Initializing Azure Blob Storage Manager...")
         blob_manager = BlobManager()
@@ -83,6 +98,13 @@ async def lifespan(app: FastAPI):
     logger.info("App is shutting down - Cleaning up resources...")
 
     try:
+        # Close Azure Document Intelligence Client
+        if "di_client" in app_services:
+            di_client = app_services["di_client"]
+            logger.info("Closing Document Intelligence Client...")
+            await di_client.close()
+            logger.info("Document Intelligence Client closed")
+
         # Close Azure Blob Storage connections
         if "blob_manager" in app_services:
             blob_manager = app_services["blob_manager"]
@@ -119,6 +141,7 @@ async def lifespan(app: FastAPI):
 
     logger.info("Application shutdown completed")
 
+
 # Initialize FastAPI app with lifespan
 app = FastAPI(
     title="Academic Content API",
@@ -135,18 +158,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Get services from app_services (initialized in lifespan)
 def get_summarizer():
     return app_services.get("summarizer") or ContentSummarizer()
 
+
 def get_video_processor():
     return app_services.get("video_processor") or VideoIndexerManager()
+
 
 def get_blob_manager():
     return app_services.get("blob_manager") or BlobManager()
 
+
 def get_content_indexer():
     return app_services.get("content_indexer") or UnifiedContentIndexer()
+
+
+def get_di_client():
+    """Get the shared Document Intelligence client"""
+    return app_services.get("di_client")
+
 
 # ================================
 # RESPONSE MODELS
@@ -155,21 +188,26 @@ def get_content_indexer():
 class ErrorResponse(BaseModel):
     detail: str
 
+
 class ProcessDocumentResponse(BaseModel):
     success: bool
     blob_path: Optional[str] = None
+
 
 class ProcessVideoResponse(BaseModel):
     success: bool
     blob_path: Optional[str] = None
 
+
 class IndexResponse(BaseModel):
     message: str
     create_new_index: bool
 
+
 class SummarizeResponse(BaseModel):
     success: bool
     blob_path: Optional[str] = None
+
 
 class ProcessDocumentRequest(BaseModel):
     course_id: str
@@ -177,6 +215,7 @@ class ProcessDocumentRequest(BaseModel):
     file_id: int
     document_name: str
     document_url: str
+
 
 class ProcessVideoRequest(BaseModel):
     course_id: str
@@ -186,36 +225,45 @@ class ProcessVideoRequest(BaseModel):
     video_url: str
     merge_segments_duration: Optional[int] = 30
 
+
 class IndexRequest(BaseModel):
     blob_paths: List[str]
     create_new_index: bool = False
 
+
 class SummarizeRequest(BaseModel):
     blob_path: str
+
 
 class SummarizeSectionRequest(BaseModel):
     full_blob_path: str
 
+
 class SummarizeCourseRequest(BaseModel):
     full_blob_path: str
+
 
 class DeleteContentRequest(BaseModel):
     source_id: str
     content_type: Optional[str] = None
+
 
 class DeleteContentResponse(BaseModel):
     success: bool
     deleted_count: int
     source_id: str
 
+
 class DetectSubjectRequest(BaseModel):
     course_path: str
     max_vid: Optional[int] = 5
     max_doc: Optional[int] = 5
 
+
 class DetectSubjectResponse(BaseModel):
     success: bool
     subject_type: str
+
 
 # ================================
 # ROOT & HEALTH ENDPOINTS
@@ -241,8 +289,9 @@ async def root():
         "docs_url": "/docs"
     }
 
+
 # ================================
-# 📄 DOCUMENT PROCESSING ENDPOINTS
+# DOCUMENT PROCESSING ENDPOINTS
 # ================================
 
 @app.post(
@@ -284,31 +333,43 @@ async def process_document_file(request: ProcessDocumentRequest):
     - blob_path: Path to the created markdown file in blob storage (or None if failed)
     """
     try:
+        logger.info(f"Starting document processing: {request.document_name}")
+        logger.info(f"CourseID: {request.course_id}, SectionID: {request.section_id}, FileID: {request.file_id}")
+        logger.info(f"DocumentURL: {request.document_url}")
+
+        # Get shared Document Intelligence client
+        di_client = get_di_client()
+
         # Process document from blob storage with new parameters
         result_blob_path = await document_to_markdown(
             request.course_id,
             request.section_id,
             request.file_id,
             request.document_name,
-            request.document_url
+            request.document_url,
+            di_client
         )
 
         if result_blob_path:
+            logger.info(f"Document processing completed successfully: {result_blob_path}")
             return {
                 "success": True,
                 "blob_path": result_blob_path
             }
         else:
+            logger.error(f"Document processing failed for: {request.document_name}")
             return {
                 "success": False,
                 "blob_path": None
             }
 
     except Exception as e:
+        logger.error(f"Error in document processing: {str(e)}", exc_info=True)
         return {
             "success": False,
             "blob_path": None
         }
+
 
 # ================================
 # 🎥 VIDEO PROCESSING ENDPOINTS
@@ -361,7 +422,6 @@ async def process_video_file(request: ProcessVideoRequest):
         logger.info(f"CourseID: {request.course_id}, SectionID: {request.section_id}, FileID: {request.file_id}")
         logger.debug(f"VideoURL: {request.video_url}")
 
-
         # Validate input parameters
         if not request.course_id or not request.section_id:
             raise HTTPException(status_code=422, detail="course_id and section_id are required")
@@ -403,6 +463,7 @@ async def process_video_file(request: ProcessVideoRequest):
     except Exception as e:
         logger.error(f"Error in video processing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
+
 
 # ================================
 # INDEXING ENDPOINTS
@@ -477,6 +538,7 @@ async def insert_to_index(request: IndexRequest, background_tasks: BackgroundTas
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting indexing: {str(e)}")
+
 
 @app.post(
     "/delete_from_index",
@@ -555,6 +617,7 @@ async def delete_from_index(request: DeleteContentRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting content: {str(e)}")
 
+
 # ================================
 # 📝 SUMMARIZATION ENDPOINTS
 # ================================
@@ -627,6 +690,7 @@ async def summarize_md_file(request: SummarizeRequest):
             "blob_path": None
         }
 
+
 @app.post(
     "/summarize/section",
     response_model=SummarizeResponse,
@@ -683,6 +747,7 @@ async def summarize_section_from_blob(request: SummarizeSectionRequest):
             "blob_path": None
         }
 
+
 @app.post(
     "/summarize/course",
     response_model=SummarizeResponse,
@@ -738,6 +803,7 @@ async def summarize_course_from_blob(request: SummarizeCourseRequest):
             "success": False,
             "blob_path": None
         }
+
 
 # ================================
 # 🔍 SUBJECT DETECTION ENDPOINTS
@@ -811,6 +877,7 @@ async def detect_subject_type(request: DetectSubjectRequest):
             status_code=500,
             detail=f"Error detecting subject type: {str(e)}"
         )
+
 
 # ================================
 # 🚀 SERVER STARTUP
