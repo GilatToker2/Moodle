@@ -6,7 +6,7 @@ Uses Azure OpenAI language model to create customized summaries
 import os
 import asyncio
 import traceback
-from typing import Dict
+from typing import Dict, Optional
 from openai import AsyncAzureOpenAI
 from Config.config import (
     AZURE_OPENAI_API_KEY,
@@ -17,7 +17,9 @@ from Config.config import (
 )
 from Source.Services.blob_manager import BlobManager
 from Config.logging_config import setup_logging
+
 logger = setup_logging()
+
 
 class ContentSummarizer:
     """
@@ -27,9 +29,6 @@ class ContentSummarizer:
     def __init__(self):
         """
         Initialize summarization system
-
-        Args:
-            model_name: Model name in Azure OpenAI (default: gpt-4o)
         """
         self.model_name = AZURE_OPENAI_CHAT_COMPLETION_MODEL
 
@@ -44,186 +43,262 @@ class ContentSummarizer:
         self.blob_manager = BlobManager()
         logger.info(f"ContentSummarizer initialized with model: {self.model_name}")
 
-    def _get_video_summary_prompt(self, subject_type: str = None, existing_summary: str = None) -> str:
-        """Prepare prompt for video summarization with adaptation to subject type and existing summary if available"""
+    def build_base_prompt(self, subject_name: Optional[str], subject_type: Optional[str],
+                          input_type: str = "file") -> str:
+        """
+        Returns a Hebrew, learning-oriented summarization prompt tailored by subject_type and input_type.
 
-        # Clear opening — identity and role
-        base_prompt = (
-            "אתה מומחה לסיכום שיעורים אקדמיים. "
-            "קיבלת תמליל מלא של הרצאת וידאו באורך כשעתיים."
+        Args:
+            subject_name: Name of the subject
+            subject_type: "מתמטי" | "הומני" | None
+            input_type: "video" | "file" (generic course file)
+
+        Returns:
+            Formatted prompt string
+        """
+
+        if input_type == "video":
+            input_line = "הקלט הוא תמלול של הרצאת וידאו. "
+        else:
+            input_line = "הקלט הוא קובץ קורס שעשוי להיות הרצאה, תרגול, שיעורי בית או כל חומר שהמרצה העלה לסטודנטים. "
+
+        # Math-focused
+        if subject_type == "מתמטי":
+            if subject_name:
+                return (
+                    f"אתה מומחה לסיכום תכני קורס אקדמיים במקצוע {subject_name} (מסוג מתמטי). "
+                    f"{input_line}"
+                    "מטרת הסיכום אינה לקיצור הטקסט, אלא יצירת סיכום לימודי שמאפשר ללמוד את החומר בצורה מסודרת ומאורגנת, "
+                    "ללא חזרות מיותרות, ותוך הכללה של כל התוכן הרלוונטי. "
+                    "התאם במיוחד לתחומים מתמטיים: כלול הגדרות מדויקות, סימון ונוטציה עקביים, משפטים ועקרונות, "
+                    "סקיצות הוכחה/אינטואיציה להוכחות, אלגוריתמים (במידת הצורך) בפסאודו־קוד קריא, ועבודה עם נוסחאות (LaTeX כאשר מתאים). "
+                    "שלב דוגמאות פתורות צעד־אחר־צעד, הדגמות של טעויות נפוצות ותובנות מפתח. "
+                    "ארגן באופן היררכי וברור, שמור על המינוח המקורי ככל האפשר, וכתוב בעברית ברורה וקוהרנטית.\n\n"
+                    "כתוב סיכום מפורט ככל שנדרש — גם אם הוא ארוך מאוד — כך שהסטודנט יוכל ללמוד רק מהסיכום בלי לצפות בהרצאה.\n\n"
+                    "מבנה הפלט:\n"
+                    "1. **רשימת נושאים עיקריים** — נקודות קצרות שמסכמות את התוכן.\n"
+                    f"2. **סיכום מפורט של ה{'שיעור' if input_type == 'video' else 'קובץ'}** — כולל הסברים, דוגמאות והערות של המרצה במידה ויש, כתוב בשפה ברורה ונגישה.\n"
+                    "3. **המלצות ללמידה והעמקה** — הצע דרכי פעולה לחזרה, חיזוק ותרגול.\n\n"
+                    "זכור:\n"
+                    "- כתוב בטון מסביר ומלווה, כאילו אתה מחנך שמנגיש את החומר.\n"
+                    f"- סדר את הכל בצורה שתשקף את הזרימה המקורית של ה{'הרצאה' if input_type == 'video' else 'קובץ'}."
+                )
+            else:
+                return (
+                    "אתה מומחה לסיכום תכני קורס אקדמיים בתחומים מתמטיים. "
+                    f"{input_line}"
+                    "מטרת הסיכום אינה לקיצור הטקסט, אלא יצירת סיכום לימודי שמאפשר ללמוד את החומר בצורה מסודרת ומאורגנת, "
+                    "ללא חזרות מיותרות, ותוך הכללה של כל התוכן הרלוונטי. "
+                    "התאם במיוחד לתחומים מתמטיים: כלול הגדרות מדויקות, סימון ונוטציה עקביים, משפטים ועקרונות, "
+                    "סקיצות הוכחה/אינטואיציה להוכחות, אלגוריתמים (במידת הצורך) בפסאודו־קוד קריא, ועבודה עם נוסחאות (LaTeX כאשר מתאים). "
+                    "שלב דוגמאות פתורות צעד־אחר־צעד, הדגמות של טעויות נפוצות ותובנות מפתח. "
+                    "ארגן באופן היררכי וברור, שמור על המינוח המקורי ככל האפשר, וכתוב בעברית ברורה וקוהרנטית.\n\n"
+                    "כתוב סיכום מפורט ככל שנדרש — גם אם הוא ארוך מאוד — כך שהסטודנט יוכל ללמוד רק מהסיכום בלי לצפות בהרצאה.\n\n"
+                    "מבנה הפלט:\n"
+                    "1. **רשימת נושאים עיקריים** — נקודות קצרות שמסכמות את התוכן.\n"
+                    f"2. **סיכום מפורט של ה{'שיעור' if input_type == 'video' else 'קובץ'}** — כולל הסברים, דוגמאות והערות של המרצה במידה ויש, כתוב בשפה ברורה ונגישה.\n"
+                    "3. **המלצות ללמידה והעמקה** — הצע דרכי פעולה לחזרה, חיזוק ותרגול.\n\n"
+                    "זכור:\n"
+                    "- כתוב בטון מסביר ומלווה, כאילו אתה מחנך שמנגיש את החומר.\n"
+                    f"- סדר את הכל בצורה שתשקף את הזרימה המקורית של ה{'הרצאה' if input_type == 'video' else 'קובץ'}."
+                )
+
+        # Humanities-focused
+        if subject_type == "הומני":
+            if subject_name:
+                return (
+                    f"אתה מומחה לסיכום תכני קורס אקדמיים במקצוע {subject_name} (מסוג הומני). "
+                    f"{input_line}"
+                    "המטרה אינה לקצר, אלא לבנות סיכום לימודי שמאפשר ללמוד את החומר באופן מסודר ומאורגן, "
+                    "ללא חזרות מיותרות, ותוך הכללה של כל התוכן הרלוונטי. "
+                    "הדגש מושגים מרכזיים, הקשרים והיסטוריה, עמדות/אסכולות, טענות ונימוקים, דוגמאות ומקרי־מבחן, "
+                    "וציטוטים קצרים עם ייחוס (אם רלוונטי). כתוב בעברית ברורה וקוהרנטית.\n\n"
+                    "כתוב סיכום מפורט ככל שנדרש — גם אם הוא ארוך מאוד — כך שהסטודנט יוכל ללמוד רק מהסיכום בלי לצפות בהרצאה.\n\n"
+                    "מבנה הפלט:\n"
+                    "1. **רשימת נושאים עיקריים** — נקודות קצרות שמסכמות את התוכן.\n"
+                    f"2. **סיכום מפורט של ה{'שיעור' if input_type == 'video' else 'קובץ'}** — כולל הסברים, דוגמאות והערות של המרצה במידה ויש, כתוב בשפה ברורה ונגישה.\n"
+                    "3. **המלצות ללמידה והעמקה** — הצע דרכי פעולה לחזרה, חיזוק ותרגול.\n\n"
+                    "זכור:\n"
+                    "- כתוב בטון מסביר ומלווה, כאילו אתה מחנך שמנגיש את החומר.\n"
+                    f"- סדר את הכל בצורה שתשקף את הזרימה המקורית של ה{'הרצאה' if input_type == 'video' else 'קובץ'}."
+                )
+            else:
+                return (
+                    "אתה מומחה לסיכום תכני קורס אקדמיים בתחומים הומניים. "
+                    f"{input_line}"
+                    "המטרה אינה לקצר, אלא לבנות סיכום לימודי שמאפשר ללמוד את החומר באופן מסודר ומאורגן, "
+                    "ללא חזרות מיותרות, ותוך הכללה של כל התוכן הרלוונטי. "
+                    "הדגש מושגים מרכזיים, הקשרים והיסטוריה, עמדות/אסכולות, טענות ונימוקים, דוגמאות ומקרי־מבחן, "
+                    "וציטוטים קצרים עם ייחוס (אם רלוונטי). כתוב בעברית ברורה וקוהרנטית.\n\n"
+                    "כתוב סיכום מפורט ככל שנדרש — גם אם הוא ארוך מאוד — כך שהסטודנט יוכל ללמוד רק מהסיכום בלי לצפות בהרצאה.\n\n"
+                    "מבנה הפלט:\n"
+                    "1. **רשימת נושאים עיקריים** — נקודות קצרות שמסכמות את התוכן.\n"
+                    f"2. **סיכום מפורט של ה{'שיעור' if input_type == 'video' else 'קובץ'}** — כולל הסברים, דוגמאות והערות של המרצה במידה ויש, כתוב בשפה ברורה ונגישה.\n"
+                    "3. **המלצות ללמידה והעמקה** — הצע דרכי פעולה לחזרה, חיזוק ותרגול.\n\n"
+                    "זכור:\n"
+                    "- כתוב בטון מסביר ומלווה, כאילו אתה מחנך שמנגיש את החומר.\n"
+                    f"- סדר את הכל בצורה שתשקף את הזרימה המקורית של ה{'הרצאה' if input_type == 'video' else 'קובץ'}."
+                )
+
+        # Generic fallback
+        return (
+            "אתה מומחה לסיכום תכני קורס אקדמיים. "
+            f"{input_line}"
+            "המטרה אינה לקצר, אלא לבנות סיכום לימודי שמאפשר ללמוד את החומר באופן מסודר ומאורגן, "
+            "ללא חזרות מיותרות, ותוך הכללה של כל התוכן הרלוונטי. "
+            "ארגן את הסיכום באופן היררכי וברור; כלול מושגים מרכזיים, דוגמאות והסברים אינטואיטיביים; "
+            "כתוב בעברית ברורה וקוהרנטית.\n\n"
+            "כתוב סיכום מפורט ככל שנדרש — גם אם הוא ארוך מאוד — כך שהסטודנט יוכל ללמוד רק מהסיכום בלי לצפות בהרצאה.\n\n"
+            "מבנה הפלט:\n"
+            "1. **רשימת נושאים עיקריים** — נקודות קצרות שמסכמות את התוכן.\n"
+            f"2. **סיכום מפורט של ה{'שיעור' if input_type == 'video' else 'קובץ'}** — כולל הסברים, דוגמאות והערות של המרצה במידה ויש, כתוב בשפה ברורה ונגישה.\n"
+            "3. **המלצות ללמידה והעמקה** — הצע דרכי פעולה לחזרה, חיזוק ותרגול.\n\n"
+            "זכור:\n"
+            "- כתוב בטון מסביר ומלווה, כאילו אתה מחנך שמנגיש את החומר.\n"
+            f"- סדר את הכל בצורה שתשקף את הזרימה המקורית של ה{'הרצאה' if input_type == 'video' else 'קובץ'}."
         )
 
-        # Addition if existing summary exists
-        if existing_summary:
-            base_summary = f"""
+    def _get_section_summary_prompt(self, subject_name: str = None, subject_type: str = None) -> str:
+        """Prepare prompt for complete Section summarization"""
 
-    סיכום קיים:
-    {existing_summary}
-
-    שים לב: הסיכום הקיים הוא רק נקודת פתיחה — המטרה שלך היא להרחיב ולפרט אותו משמעותית בהתבסס על כל הטרנסקריפט.
-    אל תחסוך בפרטים — הוסף דוגמאות, הסברים והערות נוספות כדי להפוך אותו לסיכום מקיף ומלא.
-    """
-        else:
-            base_summary = ""
-
-        # Special instructions by subject type if available
-        if subject_type == "מתמטי":
-            specific_instructions = """
-
-    זהו קורס מתמטי:
-    - הדגש נוסחאות, הגדרות מתמטיות ומשפטים.
-    - כלול דוגמאות מספריות ופתרונות שלב-שלב.
-    - הסבר את הלוגיקה מאחורי הוכחות.
-    - פרט כל נוסחה ופונקציה שמוזכרת.
-    - שמור על דיוק מתמטי וסימונים נכונים.
-    """
+        # Build subject context
+        subject_context = ""
+        if subject_name and subject_type == "מתמטי":
+            subject_context = (
+                f"אתה מומחה לסיכום חומרי לימוד אקדמיים במקצוע {subject_name} (מסוג מתמטי). "
+                "התאם במיוחד לתחומים מתמטיים: כלול הגדרות מדויקות, סימון ונוטציה עקביים, משפטים ועקרונות, "
+                "סקיצות הוכחה/אינטואיציה להוכחות, אלגוריתמים (במידת הצורך) בפסאודו־קוד קריא, ועבודה עם נוסחאות (LaTeX כאשר מתאים). "
+                "שלב דוגמאות פתורות צעד־אחר־צעד, הדגמות של טעויות נפוצות ותובנות מפתח. "
+            )
+        elif subject_name and subject_type == "הומני":
+            subject_context = (
+                f"אתה מומחה לסיכום חומרי לימוד אקדמיים במקצוע {subject_name} (מסוג הומני). "
+                "הדגש מושגים מרכזיים, הקשרים והיסטוריה, עמדות/אסכולות, טענות ונימוקים, דוגמאות ומקרי־מבחן, "
+                "וציטוטים קצרים עם ייחוס (אם רלוונטי). "
+            )
+        elif subject_type == "מתמטי":
+            subject_context = (
+                "אתה מומחה לסיכום חומרי לימוד אקדמיים בתחומים מתמטיים. "
+                "התאם במיוחד לתחומים מתמטיים: כלול הגדרות מדויקות, סימון ונוטציה עקביים, משפטים ועקרונות, "
+                "סקיצות הוכחה/אינטואיציה להוכחות, אלגוריתמים (במידת הצורך) בפסאודו־קוד קריא, ועבודה עם נוסחאות (LaTeX כאשר מתאים). "
+                "שלב דוגמאות פתורות צעד־אחר־צעד, הדגמות של טעויות נפוצות ותובנות מפתח. "
+            )
         elif subject_type == "הומני":
-            specific_instructions = """
-
-    זהו קורס הומני:
-    - הדגש רעיונות מרכזיים, תיאוריות וגישות חשיבה.
-    - כלול דוגמאות מהחיים, מקרי מבחן והקשרים היסטוריים.
-    - ציין דעות שונות ומחלוקות אם רלוונטי.
-    - עזור להבין מושגים מופשטים בצורה ברורה.
-    """
+            subject_context = (
+                "אתה מומחה לסיכום חומרי לימוד אקדמיים בתחומים הומניים. "
+                "הדגש מושגים מרכזיים, הקשרים והיסטוריה, עמדות/אסכולות, טענות ונימוקים, דוגמאות ומקרי־מבחן, "
+                "וציטוטים קצרים עם ייחוס (אם רלוונטי). "
+            )
         else:
-            specific_instructions = ""
+            subject_context = "אתה מומחה לסיכום חומרי לימוד אקדמיים. "
 
-        # Main instructions and structure
-        main_instructions = """
+        return f"""{subject_context}קיבלת אוסף של סיכומים כתובים (Markdown) מתוך Section שלם בקורס אוניברסיטאי.
+כל סיכום מייצג שיעור, מסמך או תרגול שנלמדו באותו Section.
+המטרה שלך היא לאחד את כל הסיכומים לכדי סיכום־על **מפורט**, מקיף ופדגוגי, שמציג את התמונה הכוללת של ה-Section.
 
-    המטרה שלך:
-    - ליצור סיכום מפורט, מקיף ופדגוגי שמאפשר לסטודנט להבין את כל החומר גם בלי לצפות בהרצאה.
-    - סדר את הסיכום לפי הרצף הכרונולוגי של השיעור.
-    - אל תחסוך בפרטים — השתמש בכמה טוקנים שצריך כדי שהסיכום יהיה שלם ואינפורמטיבי, גם אם הוא יוצא ארוך מאוד.
-
-    מבנה הפלט:
-    1. **רשימת נושאים עיקריים** — נקודות קצרות שמסכמות את התוכן.
-    2. **סיכום מפורט של השיעור** — כולל הסברים, דוגמאות והערות של המרצה, כתוב בשפה ברורה ונגישה.
-    3. **המלצות ללמידה והעמקה** — הצע דרכי פעולה לחזרה, חיזוק ותרגול.
-
-    זכור:
-    - כתוב בטון מסביר ומלווה, כאילו אתה מחנך שמנגיש את החומר.
-    - סדר את הכל בצורה שתשקף את הזרימה המקורית של ההרצאה.
-
-    התמליל:
-    """
-
-        # Combine everything
-        return base_prompt + base_summary + specific_instructions + main_instructions
-
-    def _get_document_summary_prompt(self) -> str:
-        """Prepare prompt for document summarization"""
-        return """אתה מומחה לסיכום חומרי לימוד אקדמיים. קיבלת מסמך לימוד מתוך קורס אוניברסיטאי.
-המסמך יכול להיות כל סוג של חומר: סיכום נושא, דף נוסחאות, דף תרגול, פתרון או כל חומר לימודי אחר.
-עליך לזהות את סוג התוכן ולהתאים את הסיכום בצורה שתשרת את הסטודנט בצורה הטובה ביותר.
+זכור: המטרה **אינה לקצר** את החומר אלא לארגן אותו מחדש, להרחיב ולהסביר כך שהסטודנט יוכל ללמוד את כל החומר מתוך הסיכום הסופי **ללא תלות בחומרים המקוריים**.
+אל תחסוך בפרטים — כלול הגדרות, דוגמאות, הסברים והערות חשובות שהופיעו בקבצים.
 
 המטרה שלך:
-- ליצור סיכום מקיף, מפורט וברור, שמכסה *את כל* החומר, כולל דוגמאות והערות של המרצה.
-- כתוב סיכום מפורט ככל שנדרש — גם אם הוא ארוך מאוד — כך שהסטודנט יוכל ללמוד רק מהסיכום בלי לצפות בהרצאה.
-- סדר את הסיכום לפי הרצף הכרונולוגי של השיעור.
+- ליצור סיכום מקיף של כל ה-Section שמכסה את כל החומרים שקיבלת.
+- לזהות קשרים ונושאים משותפים בין הקבצים השונים.
+- לסדר את החומר בצורה לוגית ומובנת.
+- ליצור מבט כולל על כל הנושאים שנלמדו ב-Section.
 
 המשימה שלך:
-- זהה את סוג התוכן והתאם את אופי הסיכום והמבנה בהתאם.
-- שמור על הסדר הלוגי שבו מוצג החומר במסמך.
-- פרט והסבר מושגים, דוגמאות, כללים או נוסחאות, לפי הצורך.
-- הדגש נקודות חשובות והקשרים בין רעיונות או נושאים.
+- פתח את הסיכום במשפט או שניים שמציגים בקצרה מה נלמד בסקשן ומה המטרה שלו.
+- עבור על כל הקבצים וזהה את הנושאים העיקריים.
+- מצא קשרים והמשכיות בין הנושאים השונים.
+- סדר את החומר בצורה הגיונית — מהבסיסי למתקדם או לפי רצף הלמידה.
+- הדגש נקודות חשובות, מושגי מפתח ודגשים שחוזרים על עצמם.
 
-מבנה הפלט (מותאם לסוג המסמך):
-- התחלה קצרה: כתוב משפט או שתיים שמסבירים מה מכיל הסיכום.
-- חלק מרכזי: סיכום מפורט של החומר עם כל ההסברים הנדרשים.
--  במידת הצורך:: רשימת נקודות עיקריות או המלצות לחזרה ותרגול, אם רלוונטי.
+מבנה הפלט:
+1. **פתיח קצר** — משפט או שניים שמסבירים מה נלמד ומה מטרת הסקשן.
+2. **סקירה כללית של ה-Section** — רשימה מסודרת של הנושאים המרכזיים.
+3. **סיכום מפורט לפי נושאים** — חלוקה לוגית של החומר עם הסברים מקיפים, דוגמאות והבהרות.
+4. **נקודות מפתח והמלצות ללמידה** — דגשים חשובים לזכירה ודרכי פעולה לחזרה ותרגול.
 
 זכור:
-- סדר את התוכן באופן ברור והגיוני.
-- שמור על טון מסביר ופשוט להבנה.
-- הקפד להתאים את מבנה הסיכום לסוג הקובץ שקיבלת.
+- שמור על מבנה מסודר והגיוני שמקל על הבנה.
+- כתוב בצורה ברורה, נגישה ומלווה — כאילו אתה מדריך את הסטודנט שלב אחר שלב.
+- אל תדלג על פרטים חשובים — המטרה היא סיכום שלם ומקיף.
 
-המסמך:
+סיכומי כל הקבצים:
 """
 
-    def _get_section_summary_prompt(self) -> str:
-        """Prepare prompt for complete Section summarization"""
-        return """אתה מומחה לסיכום חומרי לימוד אקדמיים. קיבלת אוסף של סיכומים כתובים (Markdown) מתוך Section שלם בקורס אוניברסיטאי.
-    כל סיכום מייצג שיעור, מסמך או תרגול שנלמדו באותו Section.  
-    המטרה שלך היא לאחד את כל הסיכומים לכדי סיכום-על **מפורט**, מקיף ופדגוגי שמציג את התמונה הכוללת של ה-Section.
+    def _get_course_summary_prompt(self, subject_name: str = None, subject_type: str = None) -> str:
+        """Prepare prompt for reorganizing complete course content"""
 
-    זכור: המטרה שלך **אינה לקצר** את החומר אלא לארגן אותו מחדש, להרחיב ולהסביר כך שהסטודנט יוכל ללמוד את כל החומר מתוך הסיכום הסופי **ללא תלות בחומרים המקוריים**. אל תחסוך בפרטים — ציין הגדרות, דוגמאות, הסברים והערות חשובות שהיו בפירוטי הקבצים שניתנו.
+        # Build subject context
+        subject_context = ""
+        if subject_name and subject_type == "מתמטי":
+            subject_context = (
+                f"אתה מומחה לארגון והנגשה של חומרי לימוד אקדמיים במקצוע {subject_name} (מסוג מתמטי). "
+                "התאם במיוחד לתחומים מתמטיים: כלול הגדרות מדויקות, סימון ונוטציה עקביים, משפטים ועקרונות, "
+                "סקיצות הוכחה/אינטואיציה להוכחות, אלגוריתמים (במידת הצורך) בפסאודו־קוד קריא, ועבודה עם נוסחאות (LaTeX כאשר מתאים). "
+                "שלב דוגמאות פתורות צעד־אחר־צעד, הדגמות של טעויות נפוצות ותובנות מפתח. "
+            )
+        elif subject_name and subject_type == "הומני":
+            subject_context = (
+                f"אתה מומחה לארגון והנגשה של חומרי לימוד אקדמיים במקצוע {subject_name} (מסוג הומני). "
+                "הדגש מושגים מרכזיים, הקשרים והיסטוריה, עמדות/אסכולות, טענות ונימוקים, דוגמאות ומקרי־מבחן, "
+                "וציטוטים קצרים עם ייחוס (אם רלוונטי). "
+            )
+        elif subject_type == "מתמטי":
+            subject_context = (
+                "אתה מומחה לארגון והנגשה של חומרי לימוד אקדמיים בתחומים מתמטיים. "
+                "התאם במיוחד לתחומים מתמטיים: כלול הגדרות מדויקות, סימון ונוטציה עקביים, משפטים ועקרונות, "
+                "סקיצות הוכחה/אינטואיציה להוכחות, אלגוריתמים (במידת הצורך) בפסאודו־קוד קריא, ועבודה עם נוסחאות (LaTeX כאשר מתאים). "
+                "שלב דוגמאות פתורות צעד־אחר־צעד, הדגמות של טעויות נפוצות ותובנות מפתח. "
+            )
+        elif subject_type == "הומני":
+            subject_context = (
+                "אתה מומחה לארגון והנגשה של חומרי לימוד אקדמיים בתחומים הומניים. "
+                "הדגש מושגים מרכזיים, הקשרים והיסטוריה, עמדות/אסכולות, טענות ונימוקים, דוגמאות ומקרי־מבחן, "
+                "וציטוטים קצרים עם ייחוס (אם רלוונטי). "
+            )
+        else:
+            subject_context = "אתה מומחה לארגון והנגשה של חומרי לימוד אקדמיים. "
 
-    המטרה שלך:
-    - ליצור סיכום מקיף של כל ה-Section שמכסה את כל החומרים שקיבלת.
-    - לזהות קשרים ונושאים משותפים בין הקבצים השונים.
-    - לסדר את החומר בצורה לוגית ומובנת.
-    - ליצור מבט כולל על כל הנושאים שנלמדו ב-Section.
+        return f"""{subject_context}קיבלת אוסף של סיכומי Section מתוך קורס אוניברסיטאי שלם.
+    כל סיכום Section מייצג חלק משמעותי מהחומר שכבר עבר עיבוד מפורט. כעת תפקידך לשלב, לארגן ולהציג מחדש את התוכן הקיים בצורה **מלאה**, **ברורה** ו**פדגוגית** — כך שסטודנט יוכל ללמוד את כל חומר הקורס מתוך תוצר אחד כולל.
 
-    המשימה שלך:
-    - פתח את הסיכום במשפט או שניים שמציגים בקצרה מה נלמד בסקשן ומה המטרה שלו.
-    - עבור על כל הקבצים וזהה את הנושאים העיקריים.
-    - מצא קשרים והמשכיות בין הנושאים השונים.
-    - סדר את החומר בצורה הגיונית - מהבסיסי למתקדם או לפי רצף הלמידה.
-    - הדגש נקודות חשובות, מושגי מפתח ודגשים שחוזרים על עצמם.
+    שים לב: המשימה **אינה לקצר** את החומר או להשמיט פרטים, אלא לבנות מבנה כולל, ברור ומקושר של כל תוכן הקורס.
+    עליך **לשלב באופן פעיל דוגמאות, הסברים, הגדרות והערות** — אלה אינם תוספות, אלא חלק מרכזי להבנה.
+
+    המטרה והמשימה שלך:
+    - ליצור הצגה חינוכית של הקורס כולו, המבוססת על כלל ה-Sections שסופקו.
+    - לזהות את המבנה הלוגי וההתפתחות הפדגוגית של הקורס.
+    - לארגן את החומר באופן שמדגיש התקדמות מהבסיס למתקדם וקשרים בין נושאים.
+    - **שמור על עומק, הסבר ודוגמה רלוונטית** — אל תדלג על פרטים התורמים ללמידה.
+    - הדגש מושגים חוזרים, הרחבות והכללות שנבנו לאורך הקורס.
 
     מבנה הפלט:
-    1. **פתיח קצר** — משפט או שניים שמסבירים מה נלמד ומה מטרת הסקשן.
-    2. **סקירה כללית של ה-Section** — רשימה מסודרת של הנושאים המרכזיים.
+    1. **פתיח קצר** — מטרות-על של הקורס וסקירה תמציתית של תחומי התוכן.
+    2. **סקירה כללית של נושאי קורס** — רשימה מסודרת של הנושאים המרכזיים.
     3. **סיכום מפורט לפי נושאים** — חלוקה לוגית של החומר עם הסברים מקיפים, דוגמאות והבהרות.
     4. **נקודות מפתח והמלצות ללמידה** — דגשים חשובים לזכירה ודרכי פעולה לחזרה ותרגול.
 
-    זכור:
-    - שמור על מבנה מסודר והגיוני שמקל על הבנה.
-    - כתוב בצורה ברורה, נגישה ומלווה — כאילו אתה מדריך את הסטודנט שלב אחר שלב.
-    - אל תדלג על פרטים חשובים — המטרה היא סיכום שלם ומקיף.
-
-    סיכומי כל הקבצים:
+    הצגת הקורס:
     """
-
-    def _get_course_summary_prompt(self) -> str:
-        """Prepare prompt for reorganizing complete course content"""
-        return """אתה מומחה לארגון והנגשה של חומרי לימוד אקדמיים. קיבלת אוסף של סיכומי Section מתוך קורס אוניברסיטאי שלם.
-        כל סיכום Section מייצג חלק משמעותי מהחומר, שכבר עבר עיבוד מפורט. כעת תפקידך הוא לשלב, לארגן ולהציג מחדש את התוכן הקיים בצורה **מלאה**, **ברורה** ו**פדגוגית** — כך שסטודנט יוכל ללמוד את כל חומר הקורס מתוך תוצר אחד כולל.
-
-        שים לב: המשימה **אינה לקצר** את החומר או להשמיט פרטים, אלא לבנות מבנה כולל, ברור ומקושר של כל תוכן הקורס. 
-        עליך **לשלב באופן פעיל דוגמאות, הסברים, הגדרות והערות** – אלה לא רק חלק מהחומר, אלא כלים מרכזיים להבנתו. 
-        הדוגמאות בפרט הן חלק בלתי נפרד מהלמידה – השתמש בהן כדי להמחיש מושגים, להעמיק את ההבנה, ולחבר את הסטודנט לחומר ברמה יישומית.
-
-        המטרה שלך:
-        - ליצור הצגה חינוכית של הקורס כולו, המבוססת על כלל ה-Sections שסופקו.
-        - לזהות את המבנה הלוגי וההתפתחות הפדגוגית של הקורס.
-        - לארגן את החומר באופן שמדגיש את ההתקדמות מהבסיס למתקדם.
-        - להדגיש חיבורים וקשרים בין נושאים המופיעים לאורך הקורס.
-
-        המשימה שלך:
-        - עבור על כל סיכומי ה-Sections והבין מהם הרעיונות המרכזיים של הקורס.
-        - גלה את ההתפתחות המושגית והלוגית לאורך ה-Sections.
-        - סדר את התוכן כך שישקף את זרימת ההוראה כפי שהייתה בקורס עצמו.
-        - **שמור על כל עומק, הסבר ודוגמה רלוונטית** – אל תדלג על שום פרט שיכול לתרום ללמידה.
-        - הדגש מושגים חוזרים, מעמיקים ומתפתחים לאורך הקורס.
-
-        הצגת הקורס:
-        """
 
     async def parse_video_md_file_from_blob(self, blob_path: str) -> Dict:
         """
-        Parse video.md file from blob storage into its specific parts
+        Parse video.md file from blob storage to extract transcript
 
         Args:
             blob_path: Path to video.md file in blob storage
 
         Returns:
-            Dictionary with different parts of the file
+            Dictionary with transcript content
         """
         logger.info(f"Parsing video MD file from blob: {blob_path}")
 
-        # Download file from blob storage
         file_bytes = await self.blob_manager.download_to_memory(blob_path)
         if not file_bytes:
             raise FileNotFoundError(f"File not found in blob: {blob_path}")
 
         content = file_bytes.decode('utf-8')
-
-        # Search for specific parts
-        subject_type = None
-        existing_summary = None
         full_transcript = None
 
         lines = content.split('\n')
@@ -233,113 +308,34 @@ class ContentSummarizer:
         for line in lines:
             line_stripped = line.strip()
 
-            # Identify section beginnings
-            if line_stripped == "## סוג מקצוע":
-                if current_section and section_content:
-                    # Save previous section
-                    if current_section == "subject_type":
-                        subject_type = '\n'.join(section_content).strip()
-                    elif current_section == "existing_summary":
-                        existing_summary = '\n'.join(section_content).strip()
-                    elif current_section == "full_transcript":
-                        full_transcript = '\n'.join(section_content).strip()
-
-                current_section = "subject_type"
-                section_content = []
-
-            elif line_stripped == "## סיכום השיעור":
-                if current_section and section_content:
-                    if current_section == "subject_type":
-                        subject_type = '\n'.join(section_content).strip()
-
-                current_section = "existing_summary"
-                section_content = []
-
-            elif line_stripped in ["## Full Transcript", "## טרנסקריפט מלא", "## טרנסקריפט מלא"]:
-                if current_section and section_content:
-                    if current_section == "existing_summary":
-                        existing_summary = '\n'.join(section_content).strip()
-
+            if line_stripped in ["## Full Transcript", "## טרנסקריפט מלא"]:
                 current_section = "full_transcript"
                 section_content = []
-
             elif line_stripped.startswith("## ") and current_section == "full_transcript":
-                # End transcript when reaching new section
                 if section_content:
                     full_transcript = '\n'.join(section_content).strip()
                 break
-
             else:
-                # Add content to current section
                 if current_section:
                     section_content.append(line)
 
-        # Save last section
         if current_section and section_content:
-            if current_section == "subject_type":
-                subject_type = '\n'.join(section_content).strip()
-            elif current_section == "existing_summary":
-                existing_summary = '\n'.join(section_content).strip()
-            elif current_section == "full_transcript":
-                full_transcript = '\n'.join(section_content).strip()
-
-
-        # logger.info(f" Detected subject type: {subject_type}")
-        # logger.info(f" Existing summary length: {len(existing_summary) if existing_summary else 0} chars")
-        # logger.info(f" Full transcript length: {len(full_transcript) if full_transcript else 0} chars")
-        #
-        # # הדפסת תוכן מפורט
-        # logger.info("\n" + "=" * 60)
-        # logger.info(" PARSED CONTENT DETAILS:")
-        # logger.info("=" * 60)
-        #
-        # logger.info(f"\n SUBJECT TYPE:")
-        # if subject_type:
-        #     logger.info(f"'{subject_type}'")
-        # else:
-        #     logger.info("None")
-        #
-        # logger.info(f"\n EXISTING SUMMARY:")
-        # if existing_summary:
-        #     logger.info(f"'{existing_summary}'")
-        # else:
-        #     logger.info("None")
-
-        # logger.info(f"\n TRANSCRIPT PREVIEW:")
-        # if full_transcript:
-        #     lines = full_transcript.split('\n')
-        #     if len(lines) > 4:
-        #         logger.info("First 2 lines:")
-        #         for i, line in enumerate(lines[:2]):
-        #             logger.info(f"  {i + 1}: {line}")
-        #         logger.info("  ...")
-        #         logger.info("Last 2 lines:")
-        #         for i, line in enumerate(lines[-2:], len(lines) - 1):
-        #             logger.info(f"  {i}: {line}")
-        #     else:
-        #         logger.info("Full transcript (short):")
-        #         for i, line in enumerate(lines):
-        #             logger.info(f"  {i + 1}: {line}")
-        # else:
-        #     logger.info("None")
-        #
-        # logger.info("=" * 60)
+            full_transcript = '\n'.join(section_content).strip()
 
         return {
-            "subject_type": subject_type,
-            "existing_summary": existing_summary,
             "full_transcript": full_transcript,
             "original_content": content
         }
 
-
-    async def summarize_content(self, content: str, content_type: str = "document", subject_type: str = None, existing_summary: str = None) -> str:
+    async def summarize_content(self, content: str, content_type: str = "document", subject_name: str = None,
+                                subject_type: str = None, existing_summary: str = None) -> str:
         """
         Create summary for content
 
         Args:
             content: Content to summarize (MD text)
             content_type: Content type - "video" or "document"
+            subject_name: Subject name
             subject_type: Subject type (for video only)
             existing_summary: Existing summary (for video only)
 
@@ -350,16 +346,22 @@ class ContentSummarizer:
         logger.info(f"Content length: {len(content)} characters")
 
         try:
-            # Choose prompt by content type
+            # Use the new build_base_prompt function
+            logger.info(f"Subject name: {subject_name}")
+            logger.info(f"Subject type: {subject_type}")
+
             if content_type.lower() == "video":
-                logger.info(f"Subject type: {subject_type}")
-                logger.info(f"Has existing summary: {bool(existing_summary)}")
-                system_prompt = self._get_video_summary_prompt(
+                system_prompt = self.build_base_prompt(
+                    subject_name=subject_name,
                     subject_type=subject_type,
-                    existing_summary=existing_summary
+                    input_type="video"
                 )
             else:
-                system_prompt = self._get_document_summary_prompt()
+                system_prompt = self.build_base_prompt(
+                    subject_name=subject_name,
+                    subject_type=subject_type,
+                    input_type="file"
+                )
 
             # Prepare messages
             messages = [
@@ -398,9 +400,10 @@ class ContentSummarizer:
         Identify content type by file path
         Returns 'video' if path contains 'Videos_md' or 'document' if contains 'Docs_md'
         """
-        if "Videos_md" in blob_path.lower():
+        logger.info(f"blob_path: {blob_path}")
+        if "videos_md" in blob_path.lower():
             return "video"
-        elif "Docs_md" in blob_path.lower():
+        elif "docs_md" in blob_path.lower():
             return "document"
         else:
             # Default - try to identify by extension
@@ -419,12 +422,14 @@ class ContentSummarizer:
                 return part
         return "general"  # Default if no section found
 
-    async def summarize_md_file(self, blob_path: str) -> str | None:
+    async def summarize_md_file(self, blob_path: str, subject_name: str = None, subject_type: str = None) -> str | None:
         """
         Summarize MD file from blob with automatic content type detection and save to blob
 
         Args:
             blob_path: Path to MD file in blob
+            subject_name: Subject name for context
+            subject_type: Subject type for context
 
         Returns:
             Summary path in blob or None if failed
@@ -467,7 +472,8 @@ class ContentSummarizer:
                     summary = await self.summarize_content(
                         content=parsed_data["full_transcript"],
                         content_type="video",
-                        subject_type=parsed_data.get("subject_type"),
+                        subject_name=subject_name,
+                        subject_type=subject_type,
                         existing_summary=parsed_data.get("existing_summary")
                     )
 
@@ -480,7 +486,12 @@ class ContentSummarizer:
                         return None
 
                     # Create summary
-                    summary = await self.summarize_content(content, content_type)
+                    summary = await self.summarize_content(
+                        content=content,
+                        content_type=content_type,
+                        subject_name=subject_name,
+                        subject_type=subject_type
+                    )
 
                 # Check that summary was created successfully
                 if not summary or summary.startswith("Error"):
@@ -533,6 +544,10 @@ class ContentSummarizer:
             # Extract filename without extension
             base_name = os.path.splitext(filename)[0]  # 1
 
+            # Add title to summary
+            title = f"# סיכום קובץ {base_name}\n\n"
+            summary_with_title = title + summary
+
             # Create new summary path
             summary_blob_path = f"{course_id}/{section_id}/file_summaries/{base_name}.md"
 
@@ -540,7 +555,7 @@ class ContentSummarizer:
 
             # Save to blob
             success = await self.blob_manager.upload_text_to_blob(
-                text_content=summary,
+                text_content=summary_with_title,
                 blob_name=summary_blob_path,
                 container=CONTAINER_NAME
             )
@@ -555,11 +570,14 @@ class ContentSummarizer:
             logger.info(f"Error saving summary to blob: {str(e)}")
             return None
 
-    async def summarize_section_from_blob(self, full_blob_path: str) -> str | None:
+    async def summarize_section_from_blob(self, full_blob_path: str, subject_name: str = None,
+                                          subject_type: str = None) -> str | None:
         """
         Summarize complete section from all summary files in blob storage
         Args:
             full_blob_path: Path to file_summaries folder (e.g., "CS101/Section1/file_summaries")
+            subject_name: Subject name for context
+            subject_type: Subject type for context
         Returns:
             Summary path in blob or None if failed
         """
@@ -639,7 +657,7 @@ class ContentSummarizer:
             logger.info(f"\n Creating section summary...")
 
             # Prepare special prompt for section summary
-            system_prompt = self._get_section_summary_prompt()
+            system_prompt = self._get_section_summary_prompt(subject_name, subject_type)
 
             messages = [
                 {
@@ -665,13 +683,17 @@ class ContentSummarizer:
             logger.info(f" Section summary created successfully!")
             logger.info(f" Summary length: {len(section_summary)} characters")
 
+            # Add title to section summary
+            section_title = f"# סיכום פרק {section_id}\n\n"
+            section_summary_with_title = section_title + section_summary
+
             # Save summary to blob in new structure: CourseID/section_summaries/SectionID.md
             summary_blob_path = f"{course_id}/section_summaries/{section_id}.md"
 
             logger.info(f"Saving section summary to blob: {summary_blob_path}")
 
             success = await blob_manager.upload_text_to_blob(
-                text_content=section_summary,
+                text_content=section_summary_with_title,
                 blob_name=summary_blob_path
             )
 
@@ -686,12 +708,14 @@ class ContentSummarizer:
             logger.info(f"Error in section summarization: {str(e)}")
             return None
 
-
-    async def summarize_course_from_blob(self, full_blob_path: str) -> str | None:
+    async def summarize_course_from_blob(self, full_blob_path: str, subject_name: str = None,
+                                         subject_type: str = None) -> str | None:
         """
         Summarize complete course from all section summary files in blob storage
         Args:
             full_blob_path: Path to section_summaries folder (e.g., "CS101/section_summaries")
+            subject_name: Subject name for context
+            subject_type: Subject type for context
         Returns:
             Summary path in blob or None if failed
         """
@@ -769,7 +793,7 @@ class ContentSummarizer:
             logger.info(f"\n Creating complete course summary...")
 
             # Prepare special prompt for course summary
-            system_prompt = self._get_course_summary_prompt()
+            system_prompt = self._get_course_summary_prompt(subject_name, subject_type)
 
             messages = [
                 {
@@ -795,13 +819,20 @@ class ContentSummarizer:
             logger.info(f"Course summary created successfully!")
             logger.info(f" Summary length: {len(course_summary)} characters")
 
+            # Add title to course summary
+            if subject_name:
+                course_title = f"# סיכום קורס {subject_name}\n\n"
+            else:
+                course_title = f"# סיכום קורס\n\n"
+            course_summary_with_title = course_title + course_summary
+
             # Save summary to blob in new structure: CourseID/course_summary.md
             summary_blob_path = f"{course_id}/course_summary.md"
 
             logger.info(f" Saving course summary to blob: {summary_blob_path}")
 
             success = await blob_manager.upload_text_to_blob(
-                text_content=course_summary,
+                text_content=course_summary_with_title,
                 blob_name=summary_blob_path
             )
 
@@ -817,115 +848,142 @@ class ContentSummarizer:
             return None
 
 
-
 async def main():
-    """Main function for testing"""
-    logger.info("Content Summarizer - Testing")
-    logger.info("=" * 50)
+    """Main function for testing all three types of summaries"""
+    logger.info("Content Summarizer - Testing All Summary Types with Subject Parameters")
+    logger.info("=" * 70)
 
     summarizer = ContentSummarizer()
 
-    # logger.info("\n Testing summarize_md_file with blob paths...")
+    # Test parameters
+    subject_name = "מתמטיקה בדידה"
+    subject_type = "מתמטי"
+    course_id = "Discrete_mathematics"
+    section_id = "Section2"
+
+    # # ========================================
+    # # TEST 1: Individual File Summaries
+    # # ========================================
+    # logger.info("\n" + "=" * 70)
+    # logger.info("TEST 1: Testing Individual File Summaries (summarize_md_file)")
+    # logger.info("=" * 70)
     #
-    # test_blob_paths = [
-    #     "CS101/Section1/Videos_md/2.md",
-    #     "CS101/Section1/Docs_md/1.md",
+    # test_files = [
+    #     f"{course_id}/{section_id}/Videos_md/2.md"
+    #     # f"{course_id}/{section_id}/Docs_md/2002.md"
     # ]
     #
-    # successful_tests = 0
-    # failed_tests = 0
-    #
-    # for blob_path in test_blob_paths:
-    #     logger.info(f"\n{'=' * 50}")
-    #     logger.info(f" Testing blob: {blob_path}")
-    #     logger.info(f"{'=' * 50}")
+    # successful_files = 0
+    # for i, blob_path in enumerate(test_files, 1):
+    #     logger.info(f"\n--- File Test {i}/{len(test_files)} ---")
+    #     logger.info(f"Testing file: {blob_path}")
+    #     logger.info(f"Subject: {subject_name} ({subject_type})")
     #
     #     try:
-    #         # בדיקה אם הקובץ קיים בבלוב
-    #         logger.info(f" Checking if blob exists...")
+    #         result = await summarizer.summarize_md_file(
+    #             blob_path=blob_path,
+    #             subject_name=subject_name,
+    #             subject_type=subject_type
+    #         )
     #
-    #         # יצירת סיכום מהבלוב
-    #         summary = summarizer.summarize_md_file(blob_path)
-    #
-    #         if summary and not summary.startswith("שגיאה") and not summary.startswith(
-    #                 "לא ניתן") and not summary.startswith("נכשל"):
-    #             logger.info(f" Summary created successfully!")
-    #             logger.info(f"Summary length: {len(summary)} characters")
-    #             logger.info(f"Summary preview (first 300 chars):")
-    #             logger.info("-" * 40)
-    #             logger.info(summary[:300] + "..." if len(summary) > 300 else summary)
-    #             logger.info("-" * 40)
-    #
-    #             # שמירת הסיכום לקובץ מקומי
-    #             summary_file = summarizer.save_summary_to_file(summary, blob_path, "summaries")
-    #             if summary_file:
-    #                 logger.info(f" Summary saved to: {summary_file}")
-    #
-    #             successful_tests += 1
-    #
+    #         if result:
+    #             logger.info(f"File summary created successfully!")
+    #             logger.info(f"Summary saved to: {result}")
+    #             successful_files += 1
     #         else:
-    #             logger.info(f"Failed to create summary: {summary}")
-    #             failed_tests += 1
+    #             logger.info(f"Failed to create file summary")
     #
     #     except Exception as e:
-    #         logger.info(f" Error processing blob {blob_path}: {str(e)}")
-    #         failed_tests += 1
+    #         logger.info(f" Error during file summarization: {str(e)}")
+    #         traceback.print_exc()
     #
-    #     logger.info(f"\n Waiting 2 seconds before next test...")
-    #     import time
-    #     time.sleep(2)
+    #     if i < len(test_files):
+    #         logger.info(" Waiting 3 seconds before next file...")
+    #         await asyncio.sleep(3)
+    #
+    # logger.info(f"\nFile Summary Results: {successful_files}/{len(test_files)} successful")
 
+    # ========================================
+    # TEST 2: Section Summary
+    # ========================================
+    logger.info("\n" + "=" * 70)
+    logger.info("TEST 2: Testing Section Summary (summarize_section_from_blob)")
+    logger.info("=" * 70)
 
-    # # בדיקת הפונקציה summarize_section_from_blob
-    # logger.info("\n Testing summarize_section_from_blob...")
-    #
-    # # נתיב מלא בבלוב
-    # full_blob_path = "CS101/Section1/file_summaries"
-    #
-    #
-    # logger.info(f"Testing full blob path: {full_blob_path}")
-    #
-    # try:
-    #     # יצירת סיכום section
-    #     result = summarizer.summarize_section_from_blob(full_blob_path)
-    #
-    #     if result:
-    #         logger.info(f"\nSection summary created successfully!")
-    #         logger.info(f" Summary saved to blob: {result}")
-    #         logger.info(f"Test completed successfully!")
-    #     else:
-    #         logger.info(f"\nFailed to create section summary")
-    #         logger.info(f" Check if there are summary files in {full_blob_path}")
-    #
-    # except Exception as e:
-    #     logger.info(f"\nError during section summarization: {str(e)}")
-    #     traceback.logger.info_exc()
-
-    # Test summarize_course_from_blob function
-    logger.info("\n Testing summarize_course_from_blob...")
-
-    # Full path to section summaries folder
-    full_blob_path = "Discrete_mathematics/section_summaries"
-
-    logger.info(f"Testing course summary from path: {full_blob_path}")
+    section_path = f"{course_id}/{section_id}/file_summaries"
+    logger.info(f"Testing section path: {section_path}")
+    logger.info(f"Subject: {subject_name} ({subject_type})")
 
     try:
-        # Create complete course summary
-        result = await summarizer.summarize_course_from_blob(full_blob_path)
+        logger.info("Waiting 5 seconds before section summary...")
+        await asyncio.sleep(30)
 
-        if result:
-            logger.info(f"\n Course summary created successfully!")
-            logger.info(f"Summary saved to blob: {result}")
-            logger.info(f"Test completed successfully!")
+        section_result = await summarizer.summarize_section_from_blob(
+            full_blob_path=section_path,
+            subject_name=subject_name,
+            subject_type=subject_type
+        )
+
+        if section_result:
+            logger.info(f"Section summary created successfully!")
+            logger.info(f"Section summary saved to: {section_result}")
         else:
-            logger.info(f"\n Failed to create course summary")
-            logger.info(f"Check if there are section summary files in {full_blob_path}")
+            logger.info(f"Failed to create section summary")
+            logger.info(f"Make sure there are file summaries in: {section_path}")
 
     except Exception as e:
-        logger.info(f"\n Error during course summarization: {str(e)}")
-        traceback.logger.info_exc()
+        logger.info(f"Error during section summarization: {str(e)}")
+        traceback.print_exc()
 
-    logger.info(f"\n Testing completed!")
+    # ========================================
+    # TEST 3: Course Summary
+    # ========================================
+    logger.info("\n" + "=" * 70)
+    logger.info("TEST 3: Testing Course Summary (summarize_course_from_blob)")
+    logger.info("=" * 70)
+
+    course_path = f"{course_id}/section_summaries"
+    logger.info(f"Testing course path: {course_path}")
+    logger.info(f"Subject: {subject_name} ({subject_type})")
+
+    try:
+        logger.info(" Waiting 5 seconds before course summary...")
+        await asyncio.sleep(30)
+
+        course_result = await summarizer.summarize_course_from_blob(
+            full_blob_path=course_path,
+            subject_name=subject_name,
+            subject_type=subject_type
+        )
+
+        if course_result:
+            logger.info(f"Course summary created successfully!")
+            logger.info(f"Course summary saved to: {course_result}")
+        else:
+            logger.info(f"Failed to create course summary")
+            logger.info(f"Make sure there are section summaries in: {course_path}")
+
+    except Exception as e:
+        logger.info(f" Error during course summarization: {str(e)}")
+        traceback.print_exc()
+
+    # ========================================
+    # FINAL SUMMARY
+    # ========================================
+    logger.info("\n" + "=" * 70)
+    logger.info("ESTING COMPLETED - SUMMARY")
+    logger.info("=" * 70)
+    logger.info(f"Course: {subject_name} ({subject_type})")
+    logger.info(f"Course ID: {course_id}")
+    logger.info(f"Section ID: {section_id}")
+    logger.info("")
+    logger.info("Tests Performed:")
+    # logger.info(f"   1. Individual File Summaries: {successful_files}/{len(test_files)} successful")
+    logger.info(f"   2. Section Summary: {'Correct' if 'section_result' in locals() and section_result else 'Error'}")
+    logger.info(f"   3. Course Summary: {'Correct' if 'course_result' in locals() and course_result else 'Error'}")
+    logger.info("")
+    logger.info("Note: Section and Course summaries depend on previous summaries existing in blob storage")
+    logger.info("=" * 70)
 
 
 if __name__ == "__main__":

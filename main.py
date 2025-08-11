@@ -233,14 +233,20 @@ class IndexRequest(BaseModel):
 
 class SummarizeRequest(BaseModel):
     blob_path: str
+    subject_name: Optional[str] = None
+    subject_type: Optional[str] = None
 
 
 class SummarizeSectionRequest(BaseModel):
     full_blob_path: str
+    subject_name: Optional[str] = None
+    subject_type: Optional[str] = None
 
 
 class SummarizeCourseRequest(BaseModel):
     full_blob_path: str
+    subject_name: Optional[str] = None
+    subject_type: Optional[str] = None
 
 
 class DeleteContentRequest(BaseModel):
@@ -635,26 +641,38 @@ async def summarize_md_file(request: SummarizeRequest):
     Create Summary from Markdown File in Blob Storage
 
     **Function Description:**
-    Generates an LLM-based summary from a Markdown file stored in blob storage.
+    Generates an LLM-based summary from a Markdown file stored in blob storage with subject-specific customization.
 
     **What to Expect:**
     • Downloads MD file from blob storage
-    • Automatically detects content type from path structure
-    • Processes the entire markdown content
-    • Returns a comprehensive summary based on content type
+    • Automatically detects content type from path structure (Videos_md = video, Docs_md = document)
+    • Processes the entire markdown content with subject-aware prompts
+    • Returns a comprehensive summary tailored to subject type
     • Uses Azure OpenAI for intelligent summarization
-    • Saves summary back to blob storage
+    • Saves summary back to blob storage in CourseID/SectionID/file_summaries/FileID.md
 
-    **Request Body Example:**
+    **Request Body Examples:**
+
+    **Example 1 - Mathematics Video with Full Parameters:**
     ```json
     {
-        "blob_path": "CS101/Section1/Videos_md/2.md"
+        "blob_path": "Discrete_mathematics/Section2/Videos_md/2.md",
+        "subject_name": "מתמטיקה בדידה",
+        "subject_type": "מתמטי"
     }
     ```
 
+
+    **Parameters:**
+    - **blob_path** (required): Path to MD file in blob storage
+    - **subject_name** (optional): Name of the subject for context (e.g., "מתמטיקה בדידה", "פיזיקה", "היסטוריה")
+    - **subject_type** (optional): Type of subject for prompt customization:
+      - "מתמטי": For math, physics, computer science, engineering (includes formulas, proofs, algorithms)
+      - "הומני": For humanities, history, literature, philosophy (includes concepts, arguments, examples)
+
     **Content Type Detection:**
-    - Files in 'Videos_md' folders are treated as video content
-    - Files in 'Docs_md' folders are treated as document content
+    - Files in 'Videos_md' folders → treated as video transcripts
+    - Files in 'Docs_md' folders → treated as document content
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
@@ -670,7 +688,11 @@ async def summarize_md_file(request: SummarizeRequest):
 
         # Use summarizer.summarize_md_file function - it handles everything internally
         summarizer = get_summarizer()
-        result_blob_path = await summarizer.summarize_md_file(request.blob_path)
+        result_blob_path = await summarizer.summarize_md_file(
+            request.blob_path,
+            subject_name=request.subject_name,
+            subject_type=request.subject_type
+        )
 
         if result_blob_path:
             return {
@@ -704,22 +726,31 @@ async def summarize_section_from_blob(request: SummarizeSectionRequest):
     Create Section Summary from Azure Storage
 
     **Function Description:**
-    Scans all summary files in the specified blob path and creates a unified section summary.
+    Scans all summary files in the specified blob path and creates a unified section summary with subject-specific customization.
 
     **What to Expect:**
     • Connects to Azure Storage
     • Scans the specified blob path for summary files
     • Processes markdown summary files (.md) from the path
-    • Creates a comprehensive section-level summary
+    • Creates a comprehensive section-level summary tailored to subject type
     • Uses Azure OpenAI for intelligent content analysis
-    • Saves section summary back to blob storage
+    • Saves section summary back to blob storage in CourseID/section_summaries/SectionID.md
 
-    **Request Body Example:**
+    **Request Body Examples:**
+
+    **Example 1 - Mathematics Section with Subject Parameters:**
     ```json
     {
-        "full_blob_path": "CS101/Section1/file_summaries"
+        "full_blob_path": "Discrete_mathematics/Section2/file_summaries",
+        "subject_name": "מתמטיקה בדידה",
+        "subject_type": "מתמטי"
     }
     ```
+
+    **Parameters:**
+    - **full_blob_path** (required): Path to file_summaries folder in blob storage
+    - **subject_name** (optional): Name of the subject for context
+    - **subject_type** (optional): Type of subject for prompt customization ("מתמטי" or "הומני")
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
@@ -727,7 +758,11 @@ async def summarize_section_from_blob(request: SummarizeSectionRequest):
     """
     try:
         summarizer = get_summarizer()
-        result_blob_path = await summarizer.summarize_section_from_blob(request.full_blob_path)
+        result_blob_path = await summarizer.summarize_section_from_blob(
+            request.full_blob_path,
+            subject_name=request.subject_name,
+            subject_type=request.subject_type
+        )
 
         if result_blob_path:
             return {
@@ -761,22 +796,31 @@ async def summarize_course_from_blob(request: SummarizeCourseRequest):
     Create Complete Course Summary from Azure Storage
 
     **Function Description:**
-    Analyzes all section summary files in the specified blob path and generates a comprehensive course-level summary.
+    Analyzes all section summary files in the specified blob path and generates a comprehensive course-level summary with subject-specific customization.
 
     **What to Expect:**
     • Connects to Azure Storage
     • Scans the specified blob path for section summary files
     • Processes all section summary markdown files (.md)
-    • Creates a high-level course overview and summary
+    • Creates a high-level course overview and summary tailored to subject type
     • Uses Azure OpenAI for intelligent course-level analysis
-    • Saves course summary back to blob storage
+    • Saves course summary back to blob storage in CourseID/course_summary.md
 
-    **Request Body Example:**
+    **Request Body Examples:**
+
+    **Example 1 - Mathematics Course with Subject Parameters:**
     ```json
     {
-        "full_blob_path": "CS101/section_summaries"
+        "full_blob_path": "Discrete_mathematics/section_summaries",
+        "subject_name": "מתמטיקה בדידה",
+        "subject_type": "מתמטי"
     }
     ```
+
+    **Parameters:**
+    - **full_blob_path** (required): Path to section_summaries folder in blob storage
+    - **subject_name** (optional): Name of the subject for context
+    - **subject_type** (optional): Type of subject for prompt customization ("מתמטי" or "הומני")
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
@@ -784,7 +828,11 @@ async def summarize_course_from_blob(request: SummarizeCourseRequest):
     """
     try:
         summarizer = get_summarizer()
-        result_blob_path = await summarizer.summarize_course_from_blob(request.full_blob_path)
+        result_blob_path = await summarizer.summarize_course_from_blob(
+            request.full_blob_path,
+            subject_name=request.subject_name,
+            subject_type=request.subject_type
+        )
 
         if result_blob_path:
             return {
