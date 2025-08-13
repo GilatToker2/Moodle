@@ -36,7 +36,10 @@ from Config.config import (
 )
 
 from Config.logging_config import setup_logging
+
 logger = setup_logging()
+
+
 class UnifiedContentIndexer:
     """
     Unified indexer for different content types - videos and documents
@@ -105,6 +108,9 @@ class UnifiedContentIndexer:
                 SimpleField(name="created_date", type=SearchFieldDataType.DateTimeOffset, filterable=True,
                             sortable=True),
 
+                # File name field - extracted based on content type
+                SimpleField(name="file_name", type=SearchFieldDataType.String, filterable=True, facetable=True),
+
                 # Content
                 SearchableField(name="text", type=SearchFieldDataType.String, analyzer_name="he.microsoft"),
                 SearchField(
@@ -118,7 +124,7 @@ class UnifiedContentIndexer:
                 # Chunk information
                 SimpleField(name="chunk_index", type=SearchFieldDataType.Int32, filterable=True, sortable=True),
 
-                #Video-specific fields
+                # Video-specific fields
                 SimpleField(name="start_time", type=SearchFieldDataType.String, filterable=True),
                 SimpleField(name="end_time", type=SearchFieldDataType.String, filterable=True, sortable=True),
                 SearchableField(name="keywords", type=SearchFieldDataType.String, analyzer_name="he.microsoft"),
@@ -534,6 +540,7 @@ class UnifiedContentIndexer:
                 "error": str(e),
                 "message": f"Deletion error: {e}"
             }
+
     #
     # def update_content_file(self, blob_path: str, force_update: bool = False) -> Dict:
     #     """
@@ -720,7 +727,6 @@ def _detect_content_type_from_path(blob_path: str) -> str:
         return "unknown"
 
 
-
 async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) -> Dict:
     """
     Parse video MD file from blob storage and convert to structured data format expected by indexer
@@ -746,7 +752,6 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
     duration_match = re.search(r'\*\*(?:Duration|משך זמן)\*\*: (.+)', content)
     total_duration_str = duration_match.group(1) if duration_match else "00:00:00"
     total_duration_seconds = convert_timestamp_to_seconds(total_duration_str)
-
 
     # Extract keywords
     keywords_match = re.search(r'## (?:Keywords|מילות מפתח)\n`(.+)`', content)
@@ -788,7 +793,6 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
             # Last segment - use total video duration
             end_seconds = total_duration_seconds
 
-
         segment = {
             "text": text.strip(),
             "start_time": timestamp,
@@ -809,7 +813,6 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
     else:
         video_name = f"Video {base_filename}"
 
-
     # Create structured data
     structured_data = {
         "id": video_id,
@@ -829,6 +832,7 @@ async def parse_video_md_from_blob(blob_path: str, blob_manager: BlobManager) ->
 
     return structured_data
 
+
 def convert_timestamp_to_seconds(timestamp: str) -> float:
     """Convert timestamp like '0:00:01.03' to seconds"""
     try:
@@ -847,7 +851,6 @@ def convert_timestamp_to_seconds(timestamp: str) -> float:
             return float(timestamp)
     except:
         return 0.0
-
 
 
 def convert_seconds_to_timestamp(seconds: float) -> str:
@@ -1016,6 +1019,11 @@ async def _process_single_file(blob_path: str, blob_manager: BlobManager, indexe
         if not video_data or not video_data.get("transcript_segments"):
             return None
 
+        # Extract file name from video content
+        file_bytes = await blob_manager.download_to_memory(blob_path)
+        content = file_bytes.decode('utf-8') if file_bytes else ""
+        file_name = _extract_file_name_from_video(content)
+
         # Convert to chunks
         chunks = indexer._process_video_segments_to_chunks(video_data["transcript_segments"])
 
@@ -1031,6 +1039,7 @@ async def _process_single_file(blob_path: str, blob_manager: BlobManager, indexe
                 "content_type": "video",
                 "source_id": video_data["id"],
                 "course_id": _extract_course_id_from_path(blob_path),
+                "file_name": file_name,
                 "text": chunk["text"],
                 "vector": embedding,
                 "chunk_index": chunk["chunk_index"],
@@ -1050,6 +1059,9 @@ async def _process_single_file(blob_path: str, blob_manager: BlobManager, indexe
         if not doc_data or not doc_data.get("content"):
             return None
 
+        # Extract file name from document content
+        file_name = _extract_file_name_from_document(doc_data["content"])
+
         # Convert to chunks
         chunks = indexer._process_document_to_chunks(doc_data["content"])
 
@@ -1065,6 +1077,7 @@ async def _process_single_file(blob_path: str, blob_manager: BlobManager, indexe
                 "content_type": "document",
                 "source_id": doc_data["id"],
                 "course_id": _extract_course_id_from_path(blob_path),
+                "file_name": file_name,
                 "text": chunk["text"],
                 "vector": embedding,
                 "chunk_index": chunk["chunk_index"],
@@ -1084,6 +1097,47 @@ def _extract_course_id_from_path(blob_path: str) -> str:
     """Extract course ID from blob path like 'CS101/Section1/Videos_md/file.md'"""
     parts = blob_path.split('/')
     return parts[0] if parts else "unknown"
+
+
+def _extract_file_name_from_video(content: str) -> str:
+    """
+    Extract file name from video content based on video name in the metadata section
+
+    Args:
+        content: Video MD file content
+
+    Returns:
+        File name extracted from video name, or empty string if not found
+    """
+    # Extract video name from the metadata section
+    video_name_match = re.search(r'\*\*(?:שם הוידאו|Video Name)\*\*: (.+)', content)
+    if video_name_match:
+        video_name = video_name_match.group(1).strip()
+        return video_name
+
+    return ""
+
+
+def _extract_file_name_from_document(content: str) -> str:
+    """
+    Extract file name from document content based on first line header
+
+    Args:
+        content: Document MD file content
+
+    Returns:
+        File name extracted from first line header, or empty string if not found
+    """
+    # Check if first line starts with # (header)
+    lines = content.strip().split('\n')
+    if lines and lines[0].strip().startswith('#'):
+        # Extract header text after # and any spaces
+        header = lines[0].strip()
+        # Remove # and leading/trailing spaces
+        file_name = re.sub(r'^#+\s*', '', header).strip()
+        return file_name
+
+    return ""
 
 
 async def main():
@@ -1138,7 +1192,6 @@ async def main():
     #     # בדיקת סטטיסטיקות אחרי מחיקה
     #     logger.info("\nסטטיסטיקות אחרי מחיקה:")
     #     after_delete_stats = indexer.get_stats()
-
 
     #     # # סיכום הבדיקה
     #     # logger.info("\nסיכום בדיקת הפונקציות החדשות:")
