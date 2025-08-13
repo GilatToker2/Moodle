@@ -27,6 +27,7 @@ from Source.Services.video_indexer_processor import VideoIndexerManager
 from Source.Services.unified_indexer import index_content_files, UnifiedContentIndexer
 from Source.Services.subject_detector import detect_subject_from_course
 from Source.Services.blob_manager import BlobManager
+from Source.Services.syllabus_generator import SyllabusGenerator
 
 # Initialize logger
 logger = setup_logging()
@@ -85,6 +86,12 @@ async def lifespan(app: FastAPI):
         app_services["content_indexer"] = content_indexer
         logger.info("Unified Content Indexer initialized successfully")
 
+        # Initialize Syllabus Generator
+        logger.info("Initializing Syllabus Generator...")
+        syllabus_generator = SyllabusGenerator()
+        app_services["syllabus_generator"] = syllabus_generator
+        logger.info("Syllabus Generator initialized successfully")
+
         logger.info("All services initialized successfully - Application ready!")
 
     except Exception as e:
@@ -128,6 +135,14 @@ async def lifespan(app: FastAPI):
                 logger.info("Closing Summarizer OpenAI connections...")
                 await summarizer.openai_client.close()
                 logger.info("Summarizer OpenAI connections closed")
+
+        # Close OpenAI client connections in Syllabus Generator
+        if "syllabus_generator" in app_services:
+            syllabus_generator = app_services["syllabus_generator"]
+            if hasattr(syllabus_generator, 'openai_client') and syllabus_generator.openai_client:
+                logger.info("Closing Syllabus Generator OpenAI connections...")
+                await syllabus_generator.openai_client.close()
+                logger.info("Syllabus Generator OpenAI connections closed")
 
         # Note: VideoIndexerManager doesn't hold persistent connections that need closing
         # It uses httpx.AsyncClient within context managers for each request
@@ -179,6 +194,11 @@ def get_content_indexer():
 def get_di_client():
     """Get the shared Document Intelligence client"""
     return app_services.get("di_client")
+
+
+def get_syllabus_generator():
+    """Get the shared Syllabus Generator"""
+    return app_services.get("syllabus_generator") or SyllabusGenerator()
 
 
 # ================================
@@ -270,6 +290,12 @@ class DetectSubjectResponse(BaseModel):
     subject_type: str
 
 
+class CreateSyllabusRequest(BaseModel):
+    full_blob_path: str
+    subject_name: Optional[str] = None
+    subject_type: Optional[str] = None
+
+
 # ================================
 # ROOT & HEALTH ENDPOINTS
 # ================================
@@ -289,7 +315,8 @@ async def root():
             "/summarize/md - Create summary from Markdown",
             "/summarize/section - Create section summary",
             "/summarize/course - Create course summary",
-            "/detect/subject - Detect subject type from course"
+            "/detect/subject - Detect subject type from course",
+            "/create/syllabus - Create academic syllabus from course summary"
         ],
         "docs_url": "/docs"
     }
@@ -921,6 +948,97 @@ async def detect_subject_type(request: DetectSubjectRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Error detecting subject type: {str(e)}"
+        )
+
+
+# ================================
+# 📋 SYLLABUS GENERATION ENDPOINTS
+# ================================
+
+@app.post(
+    "/create/syllabus",
+    response_model=SummarizeResponse,
+    responses={
+        404: {"model": ErrorResponse, "description": "Course summary not found"},
+        500: {"model": ErrorResponse, "description": "Syllabus creation failed"}
+    },
+    tags=["Syllabus Generation"]
+)
+async def create_syllabus_from_course_summary(request: CreateSyllabusRequest):
+    """
+    Create Academic Syllabus from Course Summary
+
+    **Function Description:**
+    Generates a structured academic syllabus from a course summary file using AI analysis with subject-specific customization.
+
+    **What to Expect:**
+    • Downloads course summary file from blob storage
+    • Analyzes the complete course content using Azure OpenAI
+    • Creates a professional, structured syllabus document
+    • Tailors content based on subject type (mathematical vs. humanities)
+    • Saves syllabus back to blob storage in CourseID/syllabus.md
+
+    **Request Body Examples:**
+
+    **Example 1 - Medieval History Course:**
+    ```json
+    {
+        "full_blob_path": "Intro_to_medieval_history/course_summary.md",
+        "subject_name": "מבוא לימי הביניים",
+        "subject_type": "הומני"
+    }
+    ```
+
+    **Parameters:**
+    - **full_blob_path** (required): Path to course summary file (must end with '/course_summary.md')
+    - **subject_name** (optional): Name of the subject for context
+    - **subject_type** (optional): Type of subject for prompt customization:
+      - "מתמטי": For math, physics, computer science, engineering
+      - "הומני": For humanities, history, literature, philosophy
+
+    **Returns:**
+    - success: Boolean indicating if the operation was successful
+    - blob_path: Path to the created syllabus file in blob storage (CourseID/syllabus.md)
+    """
+    try:
+        logger.info(f"Starting syllabus creation from: {request.full_blob_path}")
+        logger.info(f"Subject: {request.subject_name} ({request.subject_type})")
+
+        # Validate path format
+        if not request.full_blob_path.endswith('/course_summary.md'):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid path format. Path must end with '/course_summary.md'"
+            )
+
+        # Use syllabus generator
+        syllabus_generator = get_syllabus_generator()
+        result_blob_path = await syllabus_generator.create_syllabus_from_course_summary(
+            request.full_blob_path,
+            subject_name=request.subject_name,
+            subject_type=request.subject_type
+        )
+
+        if result_blob_path:
+            logger.info(f"Syllabus created successfully: {result_blob_path}")
+            return {
+                "success": True,
+                "blob_path": result_blob_path
+            }
+        else:
+            logger.error(f"Failed to create syllabus from: {request.full_blob_path}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Course summary not found or failed to process: {request.full_blob_path}"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in syllabus creation: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error creating syllabus: {str(e)}"
         )
 
 
