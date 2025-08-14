@@ -158,7 +158,7 @@ class ContentSummarizer:
             f"- סדר את הכל בצורה שתשקף את הזרימה המקורית של ה{'הרצאה' if input_type == 'video' else 'קובץ'}."
         )
 
-    def _get_section_summary_prompt(self, subject_name: str = None, subject_type: str = None) -> str:
+    def _get_section_summary_prompt(self, subject_name: str = None, subject_type: str = None, previous_summary: str = None) -> str:
         """Prepare prompt for complete Section summarization"""
 
         # Build subject context
@@ -192,12 +192,29 @@ class ContentSummarizer:
         else:
             subject_context = "אתה מומחה לסיכום חומרי לימוד אקדמיים. "
 
+        # Build previous summary context
+        previous_context = ""
+        if previous_summary:
+            previous_context = f"""
+**חשוב: יש לך גם סיכום מהסקשיין הקודם לקונטקסט:**
+
+{previous_summary}
+
+**הוראות לשימוש בסיכום הקודם:**
+- השתמש בסיכום הקודם כרקע וקונטקסט להבנת החומר הנוכחי
+- אם המרצה מתייחס למושגים או נושאים שהוסברו בסקשיין הקודם, תוכל לתת הקשר מתאים
+- אל תחזור על החומר מהסקשיין הקודם - רק תשתמש בו להבנה וקונטקסט
+- הסיכום שלך צריך להתמקד בחומר החדש מהסקשיין הנוכחי
+- אם יש קשרים או המשכיות לחומר הקודם, ציין זאת בקצרה
+
+"""
+
         return f"""{subject_context}קיבלת אוסף של סיכומים כתובים (Markdown) מתוך Section שלם בקורס אוניברסיטאי.
 כל סיכום מייצג שיעור, מסמך או תרגול שנלמדו באותו Section.
 המטרה שלך היא לאחד את כל הסיכומים לכדי סיכום־על **מפורט**, מקיף ופדגוגי, שמציג את התמונה הכוללת של ה-Section.
-
-זכור: המטרה **אינה לקצר** את החומר אלא לארגן אותו מחדש, להרחיב ולהסביר כך שהסטודנט יוכל ללמוד את כל החומר מתוך הסיכום הסופי **ללא תלות בחומרים המקוריים**.
 אל תחסוך בפרטים — כלול הגדרות, דוגמאות, הסברים והערות חשובות שהופיעו בקבצים.
+
+{previous_context}זכור: המטרה **אינה לקצר** את החומר אלא לארגן אותו מחדש, להרחיב ולהסביר כך שהסטודנט יוכל ללמוד את כל החומר מתוך הסיכום הסופי **ללא תלות בחומרים המקוריים**.
 
 המטרה שלך:
 - ליצור סיכום מקיף של כל ה-Section שמכסה את כל החומרים שקיבלת.
@@ -571,7 +588,7 @@ class ContentSummarizer:
             return None
 
     async def summarize_section_from_blob(self, full_blob_path: str, subject_name: str = None,
-                                          subject_type: str = None) -> str | None:
+                                          subject_type: str = None, previous_summary_path: str = None) -> str | None:
         """
         Summarize complete section from all summary files in blob storage
         Args:
@@ -653,11 +670,25 @@ class ContentSummarizer:
             logger.info(f"\n Total working with {len(successful_files)} files")
             logger.info(f"Total content length: {len(all_content)} characters")
 
+            # Handle previous summary path if provided
+            previous_summary = None
+            if previous_summary_path:
+                try:
+                    logger.info(f"Trying to read previous section summary: {previous_summary_path}")
+                    previous_file_bytes = await blob_manager.download_to_memory(previous_summary_path)
+                    if previous_file_bytes:
+                        previous_summary = previous_file_bytes.decode('utf-8')
+                        logger.info(f"Successfully loaded previous summary: {len(previous_summary)} characters")
+                    else:
+                        logger.warning(f"Could not download previous summary from: {previous_summary_path}")
+                except Exception as e:
+                    logger.warning(f"Error loading previous summary from {previous_summary_path}: {e}")
+
             # Create summary
             logger.info(f"\n Creating section summary...")
 
             # Prepare special prompt for section summary
-            system_prompt = self._get_section_summary_prompt(subject_name, subject_type)
+            system_prompt = self._get_section_summary_prompt(subject_name, subject_type, previous_summary)
 
             messages = [
                 {
@@ -671,6 +702,7 @@ class ContentSummarizer:
             ]
 
             # Call language model
+            logger.info(f"Final prompt: {messages}")
             response = await self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
@@ -914,14 +946,20 @@ async def main():
     logger.info(f"Testing section path: {section_path}")
     logger.info(f"Subject: {subject_name} ({subject_type})")
 
+
     try:
         logger.info("Waiting 5 seconds before section summary...")
         await asyncio.sleep(30)
 
+        # נתיב לסיכום הקודם
+        previous_section_path = f"{course_id}/section_summaries/Section1.md"
+        logger.info(f"Using previous section summary path: {previous_section_path}")
+
         section_result = await summarizer.summarize_section_from_blob(
             full_blob_path=section_path,
             subject_name=subject_name,
-            subject_type=subject_type
+            subject_type=subject_type,
+            previous_summary_path=previous_section_path  # מעביר נתיב במקום טקסט
         )
 
         if section_result:
@@ -935,37 +973,37 @@ async def main():
         logger.info(f"Error during section summarization: {str(e)}")
         traceback.print_exc()
 
-    # ========================================
-    # TEST 3: Course Summary
-    # ========================================
-    logger.info("\n" + "=" * 70)
-    logger.info("TEST 3: Testing Course Summary (summarize_course_from_blob)")
-    logger.info("=" * 70)
-
-    course_path = f"{course_id}/section_summaries"
-    logger.info(f"Testing course path: {course_path}")
-    logger.info(f"Subject: {subject_name} ({subject_type})")
-
-    try:
-        logger.info(" Waiting 5 seconds before course summary...")
-        await asyncio.sleep(30)
-
-        course_result = await summarizer.summarize_course_from_blob(
-            full_blob_path=course_path,
-            subject_name=subject_name,
-            subject_type=subject_type
-        )
-
-        if course_result:
-            logger.info(f"Course summary created successfully!")
-            logger.info(f"Course summary saved to: {course_result}")
-        else:
-            logger.info(f"Failed to create course summary")
-            logger.info(f"Make sure there are section summaries in: {course_path}")
-
-    except Exception as e:
-        logger.info(f" Error during course summarization: {str(e)}")
-        traceback.print_exc()
+    # # ========================================
+    # # TEST 3: Course Summary
+    # # ========================================
+    # logger.info("\n" + "=" * 70)
+    # logger.info("TEST 3: Testing Course Summary (summarize_course_from_blob)")
+    # logger.info("=" * 70)
+    #
+    # course_path = f"{course_id}/section_summaries"
+    # logger.info(f"Testing course path: {course_path}")
+    # logger.info(f"Subject: {subject_name} ({subject_type})")
+    #
+    # try:
+    #     logger.info(" Waiting 5 seconds before course summary...")
+    #     await asyncio.sleep(30)
+    #
+    #     course_result = await summarizer.summarize_course_from_blob(
+    #         full_blob_path=course_path,
+    #         subject_name=subject_name,
+    #         subject_type=subject_type
+    #     )
+    #
+    #     if course_result:
+    #         logger.info(f"Course summary created successfully!")
+    #         logger.info(f"Course summary saved to: {course_result}")
+    #     else:
+    #         logger.info(f"Failed to create course summary")
+    #         logger.info(f"Make sure there are section summaries in: {course_path}")
+    #
+    # except Exception as e:
+    #     logger.info(f" Error during course summarization: {str(e)}")
+    #     traceback.print_exc()
 
     # ========================================
     # FINAL SUMMARY
@@ -980,7 +1018,7 @@ async def main():
     logger.info("Tests Performed:")
     # logger.info(f"   1. Individual File Summaries: {successful_files}/{len(test_files)} successful")
     logger.info(f"   2. Section Summary: {'Correct' if 'section_result' in locals() and section_result else 'Error'}")
-    logger.info(f"   3. Course Summary: {'Correct' if 'course_result' in locals() and course_result else 'Error'}")
+    # logger.info(f"   3. Course Summary: {'Correct' if 'course_result' in locals() and course_result else 'Error'}")
     logger.info("")
     logger.info("Note: Section and Course summaries depend on previous summaries existing in blob storage")
     logger.info("=" * 70)

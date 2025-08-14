@@ -261,6 +261,7 @@ class SummarizeSectionRequest(BaseModel):
     full_blob_path: str
     subject_name: Optional[str] = None
     subject_type: Optional[str] = None
+    previous_summary_path: Optional[str] = None
 
 
 class SummarizeCourseRequest(BaseModel):
@@ -774,10 +775,21 @@ async def summarize_section_from_blob(request: SummarizeSectionRequest):
     }
     ```
 
+    **Example 2 - Section with Previous Summary Context:**
+    ```json
+    {
+        "full_blob_path": "Discrete_mathematics/Section2/file_summaries",
+        "subject_name": "מתמטיקה בדידה",
+        "subject_type": "מתמטי",
+        "previous_summary_path": "Discrete_mathematics/section_summaries/Section1.md"
+    }
+    ```
+
     **Parameters:**
     - **full_blob_path** (required): Path to file_summaries folder in blob storage
     - **subject_name** (optional): Name of the subject for context
     - **subject_type** (optional): Type of subject for prompt customization ("מתמטי" or "הומני")
+    - **previous_summary_path** (optional): Path to previous section summary file for context and continuity
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
@@ -788,7 +800,8 @@ async def summarize_section_from_blob(request: SummarizeSectionRequest):
         result_blob_path = await summarizer.summarize_section_from_blob(
             request.full_blob_path,
             subject_name=request.subject_name,
-            subject_type=request.subject_type
+            subject_type=request.subject_type,
+            previous_summary_path=request.previous_summary_path
         )
 
         if result_blob_path:
