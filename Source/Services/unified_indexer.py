@@ -46,21 +46,43 @@ class UnifiedContentIndexer:
     Uses flexible schema that fits both types
     """
 
-    def __init__(self):
+    def __init__(self, openai_client=None):
+        """
+        Initialize unified content indexer
+
+        Args:
+            openai_client: Shared OpenAI client instance (optional)
+        """
         self.search_endpoint = f"https://{SEARCH_SERVICE_NAME}.search.windows.net"
         self.credential = AzureKeyCredential(SEARCH_API_KEY)
         self.index_client = SearchIndexClient(self.search_endpoint, self.credential)
         self.index_name = INDEX_NAME
 
-        # Configure async OpenAI client
-        self.openai_client = AsyncAzureOpenAI(
-            api_key=AZURE_OPENAI_API_KEY,
-            api_version="2023-05-15",
-            azure_endpoint=AZURE_OPENAI_ENDPOINT
-        )
+        # Use provided OpenAI client or create fallback instance with ownership tracking
+        if openai_client is not None:
+            self.openai_client = openai_client
+            self._owns_client = False
+        else:
+            # Configure async OpenAI client as fallback
+            self.openai_client = AsyncAzureOpenAI(
+                api_key=AZURE_OPENAI_API_KEY,
+                api_version="2023-05-15",
+                azure_endpoint=AZURE_OPENAI_ENDPOINT
+            )
+            self._owns_client = True
 
         # Initialize tokenizer
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
+
+    async def close(self):
+        """Close the OpenAI client connection only if we own it"""
+        # Close only if we created the client here
+        if getattr(self, "_owns_client", False) and self.openai_client is not None:
+            try:
+                await self.openai_client.close()
+                logger.info("Local OpenAI client closed successfully")
+            except Exception as e:
+                logger.warning(f"Error closing local OpenAI client: {e}")
 
     def create_index(self, create_new: bool = True) -> bool:
         """Create the unified content chunks index with flexible schema
@@ -405,7 +427,7 @@ class UnifiedContentIndexer:
                 continue
 
             # Use sentence-based chunking for this section
-            section_chunks = self.sentence_based_chunking(section_body, max_chunk_length=500)
+            section_chunks = self.sentence_based_chunking(section_body, max_chunk_length=2000)
 
             # Add metadata to each chunk
             for chunk in section_chunks:
@@ -891,8 +913,7 @@ async def parse_document_md_from_blob(blob_path: str, blob_manager: BlobManager)
     logger.info(f"Parsed document MD file")
     return document_data
 
-
-async def index_content_files(blob_paths: List[str], create_new_index: bool = False) -> str:
+async def index_content_files(blob_paths: List[str], create_new_index: bool = False, openai_client=None, blob_manager=None) -> str:
     """
     FULLY ASYNC: Index MD files from blob storage to unified index with batching and concurrency.
     This function is designed to run in FastAPI BackgroundTasks.
@@ -900,15 +921,23 @@ async def index_content_files(blob_paths: List[str], create_new_index: bool = Fa
     Args:
         blob_paths: List of blob paths of MD files (e.g., ["Videos_md/video.md", "Docs_md/doc.md"])
         create_new_index: Whether to create new index (True) or add to existing index (False)
+        openai_client: Shared OpenAI client instance (optional)
+        blob_manager: Shared BlobManager instance (optional)
 
     Returns:
         Success message after completion
     """
+    indexer = None
+    created_local_blob_manager = False
     try:
         logger.info(f"Starting async indexing of {len(blob_paths)} files")
 
-        indexer = UnifiedContentIndexer()
-        blob_manager = BlobManager()
+        indexer = UnifiedContentIndexer(openai_client=openai_client)
+
+        # Use provided blob manager or create fallback
+        if blob_manager is None:
+            blob_manager = BlobManager()
+            created_local_blob_manager = True
 
         # Create/initialize index
         if not indexer.create_index(create_new=create_new_index):
@@ -991,6 +1020,11 @@ async def index_content_files(blob_paths: List[str], create_new_index: bool = Fa
         error_msg = f"Indexing failed: {str(e)}"
         logger.error(error_msg)
         return error_msg
+    finally:
+        if indexer is not None:
+            await indexer.close()  # safe: closes only if it owns the client
+        if created_local_blob_manager and blob_manager is not None:
+            await blob_manager.close()
 
 
 async def _process_single_file_safe(blob_path: str, blob_manager: BlobManager, indexer: UnifiedContentIndexer):
@@ -1217,3 +1251,4 @@ async def main():
 if __name__ == "__main__":
     logger.info("running")
     asyncio.run(main())
+

@@ -26,7 +26,6 @@ class BlobManager:
         self._async_client = AsyncBlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING)
 
         # File type to content type mapping
-        # File type to content type mapping
         self.content_types = {
             '.mp4': 'video/mp4',
             '.avi': 'video/x-msvideo',
@@ -51,6 +50,12 @@ class BlobManager:
             '.rar': 'application/x-rar-compressed',
             '.7z': 'application/x-7z-compressed'
         }
+
+    async def close(self):
+        """Close the async client connection"""
+        if hasattr(self, '_async_client') and self._async_client:
+            await self._async_client.close()
+            logger.info("BlobManager async client closed")
 
     def _get_content_type(self, file_path: str) -> str:
         """Determine content type based on file extension"""

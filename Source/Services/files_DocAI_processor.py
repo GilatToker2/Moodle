@@ -6,7 +6,9 @@ from azure.ai.documentintelligence.aio import DocumentIntelligenceClient
 from Source.Services.blob_manager import BlobManager
 from Config.config import AZURE_FORM_RECOGNIZER_KEY, AZURE_FORM_RECOGNIZER_ENDPOINT
 from Config.logging_config import setup_logging
+
 logger = setup_logging()
+
 
 async def process_single_document(file_path: str) -> str | None:
     """
@@ -64,6 +66,7 @@ async def process_document_from_memory(file_bytes: bytes, di_client=None) -> str
     # Use shared client if provided, otherwise create per-request (fallback)
     if di_client:
         # Preferred: use shared app-scoped client (better pooling + lower latency)
+        # DON'T use async with here since the client is already managed by the app lifespan
         try:
             poller = await di_client.begin_analyze_document(
                 "prebuilt-layout",
@@ -79,7 +82,6 @@ async def process_document_from_memory(file_bytes: bytes, di_client=None) -> str
             return None
     else:
         # Fallback: create client per request when lifecycle management isn't available
-        # or was causing "unclosed session/transport closed" issues
         try:
             client = DocumentIntelligenceClient(
                 endpoint=AZURE_FORM_RECOGNIZER_ENDPOINT,
@@ -102,7 +104,8 @@ async def process_document_from_memory(file_bytes: bytes, di_client=None) -> str
             return None
 
 
-async def document_to_markdown(course_id: str, section_id: str, file_id: int, document_name: str, document_url: str, di_client=None) -> str | None:
+async def document_to_markdown(course_id: str, section_id: str, file_id: int, document_name: str, document_url: str,
+                               di_client=None, blob_manager_raw=None, blob_manager_processed=None) -> str | None:
     """
     Streamlined: Downloads document from blob → processes in memory → uploads markdown.
     No temp files or disk I/O.
@@ -113,14 +116,13 @@ async def document_to_markdown(course_id: str, section_id: str, file_id: int, do
         file_id: File identifier
         document_name: Document name (will be included in transcription)
         document_url: File path in blob storage (e.g., "Section1/Raw-data/Docs/Ex5Sol.pdf")
+        di_client: Shared Document Intelligence client
+        blob_manager_raw: Shared BlobManager for raw-data container
+        blob_manager_processed: Shared BlobManager for processeddata container
 
     Returns:
         File path in blob storage or None if failed
     """
-    # Create blob managers - one for reading from raw-data and one for writing to processeddata
-    blob_manager_read = BlobManager(container_name="raw-data")
-    blob_manager_write = BlobManager(container_name="processeddata")
-
     # Check file extension
     supported_extensions = {'.pdf', '.doc', '.docx', '.pptx', '.png', '.jpg', '.jpeg', '.tiff', '.bmp'}
     file_ext = os.path.splitext(document_url)[1].lower()
@@ -129,43 +131,96 @@ async def document_to_markdown(course_id: str, section_id: str, file_id: int, do
         logger.info(f"Unsupported file type: {document_url}")
         return None
 
-    logger.info(f"Downloading file from raw-data container: {document_url}")
+    # Use shared blob managers if provided, otherwise create per-request (fallback)
+    if blob_manager_raw and blob_manager_processed:
+        # Preferred: use shared app-scoped blob managers
+        logger.info(f"Downloading file from raw-data container: {document_url}")
 
-    # Step 1: Download blob directly to memory from raw-data container
-    file_bytes = await blob_manager_read.download_to_memory(document_url)
-    if not file_bytes:
-        logger.info(f"Failed to download file to memory from raw-data container: {document_url}")
-        return None
+        # Step 1: Download blob directly to memory from raw-data container
+        file_bytes = await blob_manager_raw.download_to_memory(document_url)
+        if not file_bytes:
+            logger.info(f"Failed to download file to memory from raw-data container: {document_url}")
+            return None
 
-    logger.info(f"Processing file in memory: {document_name}")
+        logger.info(f"Processing file in memory: {document_name}")
 
-    # Step 2: Process document directly from memory using shared client
-    md_content = await process_document_from_memory(file_bytes, di_client)
-    if not md_content:
-        logger.info(f"Failed to process file: {document_name}")
-        return None
+        # Step 2: Process document directly from memory using shared client
+        md_content = await process_document_from_memory(file_bytes, di_client)
+        if not md_content:
+            logger.info(f"Failed to process file: {document_name}")
+            return None
 
-    # Add document name to the beginning of the transcription
-    enhanced_md_content = f"# {document_name}\n\n{md_content}"
+        # Add document name to the beginning of the transcription
+        enhanced_md_content = f"# {document_name}\n\n{md_content}"
 
-    # Step 3: Upload markdown directly to processeddata container
-    # Create path according to structure: CourseID/SectionID/Docs_md/FileID.md
-    target_blob_path = f"{course_id}/{section_id}/Docs_md/{file_id}.md"
+        # Step 3: Upload markdown directly to processeddata container
+        # Create path according to structure: CourseID/SectionID/Docs_md/FileID.md
+        target_blob_path = f"{course_id}/{section_id}/Docs_md/{file_id}.md"
 
-    logger.info(f"Uploading markdown to processeddata container: {target_blob_path}")
+        logger.info(f"Uploading markdown to processeddata container: {target_blob_path}")
 
-    success = await blob_manager_write.upload_text_to_blob(
-        text_content=enhanced_md_content,
-        blob_name=target_blob_path
-    )
+        success = await blob_manager_processed.upload_text_to_blob(
+            text_content=enhanced_md_content,
+            blob_name=target_blob_path
+        )
 
-    if success:
-        logger.info(f"File uploaded successfully to processeddata container: {target_blob_path}")
-        return target_blob_path
+        if success:
+            logger.info(f"File uploaded successfully to processeddata container: {target_blob_path}")
+            return target_blob_path
+        else:
+            logger.info(f"Failed to upload file to processeddata container")
+            return None
+
     else:
-        logger.info(f"Failed to upload file to processeddata container")
-        return None
+        # Fallback: create blob managers per request when lifecycle management isn't available
+        blob_manager_read = BlobManager(container_name="raw-data")
+        blob_manager_write = BlobManager(container_name="processeddata")
 
+        try:
+            logger.info(f"Downloading file from raw-data container: {document_url}")
+
+            # Step 1: Download blob directly to memory from raw-data container
+            file_bytes = await blob_manager_read.download_to_memory(document_url)
+            if not file_bytes:
+                logger.info(f"Failed to download file to memory from raw-data container: {document_url}")
+                return None
+
+            logger.info(f"Processing file in memory: {document_name}")
+
+            # Step 2: Process document directly from memory using shared client
+            md_content = await process_document_from_memory(file_bytes, di_client)
+            if not md_content:
+                logger.info(f"Failed to process file: {document_name}")
+                return None
+
+            # Add document name to the beginning of the transcription
+            enhanced_md_content = f"# {document_name}\n\n{md_content}"
+
+            # Step 3: Upload markdown directly to processeddata container
+            # Create path according to structure: CourseID/SectionID/Docs_md/FileID.md
+            target_blob_path = f"{course_id}/{section_id}/Docs_md/{file_id}.md"
+
+            logger.info(f"Uploading markdown to processeddata container: {target_blob_path}")
+
+            success = await blob_manager_write.upload_text_to_blob(
+                text_content=enhanced_md_content,
+                blob_name=target_blob_path
+            )
+
+            if success:
+                logger.info(f"File uploaded successfully to processeddata container: {target_blob_path}")
+                return target_blob_path
+            else:
+                logger.info(f"Failed to upload file to processeddata container")
+                return None
+
+        finally:
+            # Always close the blob managers in fallback mode
+            try:
+                await blob_manager_read.close()
+                await blob_manager_write.close()
+            except Exception as e:
+                logger.warning(f"Error closing blob managers: {e}")
 
 
 async def main():

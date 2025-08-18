@@ -64,6 +64,13 @@ class VideoIndexerManager:
             logger.info(f"Error initializing VideoIndexer client: {e}")
             self._vi_client = None
 
+
+    async def close(self):
+        """Close VideoIndexer connections and clean up resources"""
+        logger.info("VideoIndexerManager cleanup completed")
+        # Note: httpx.AsyncClient is used with 'async with' context manager
+        # so connections are properly closed automatically
+
     async def get_valid_token(self):
         """Get valid token - automatically refreshes if needed"""
         if self._should_refresh_token():
@@ -333,7 +340,6 @@ class VideoIndexerManager:
     #             logger.info(f"Summary state: {state} - waiting...")
     #             await asyncio.sleep(10)
 
-
     async def delete_video(self, video_id: str) -> bool:
         """Delete video from Video Indexer to clean up unnecessary containers"""
         url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}"
@@ -436,7 +442,8 @@ class VideoIndexerManager:
 
         # Metadata
         md_content.append("## פרטי הוידאו")
-        md_content.append(f"- **שם הוידאו**: {structured_data.get('video_name', structured_data.get('name', 'לא זמין'))}")
+        md_content.append(
+            f"- **שם הוידאו**: {structured_data.get('video_name', structured_data.get('name', 'לא זמין'))}")
         md_content.append(f"- **מזהה וידאו**: {structured_data.get('id', 'לא זמין')}")
         md_content.append(f"- **משך זמן**: {structured_data.get('duration', 'לא זמין')}")
         md_content.append(f"- **שפה**: {structured_data.get('language', 'לא זמין')}")
@@ -515,8 +522,7 @@ class VideoIndexerManager:
         return "\n".join(md_content)
 
     async def process_video_to_md(self, course_id: str, section_id: str, file_id: int, video_name: str,
-                                  video_url: str,
-                                  merge_segments_duration: Optional[int] = 30) -> str | None:
+                                  video_url: str, blob_manager_raw=None, blob_manager_processed=None) -> str | None:
         """
         NON-BLOCKING: Process video from blob storage to create markdown file
         Returns target path immediately after uploading video, processing continues in background
@@ -527,13 +533,18 @@ class VideoIndexerManager:
             file_id: File identifier
             video_name: Video name (will be included in transcription)
             video_url: Video path in blob storage
-            merge_segments_duration: Maximum duration in seconds for merging segments
+            blob_manager_raw: Shared BlobManager for raw-data container
+            blob_manager_processed: Shared BlobManager for processeddata container
 
         Returns:
             File path in blob storage where final result will be saved, or None if upload failed
         """
-        # Create blob manager for reading from raw-data
-        blob_manager_read = BlobManager(container_name="raw-data")
+        # Use provided blob managers or create fallback instances
+        if blob_manager_raw is None:
+            blob_manager_raw = BlobManager(container_name="raw-data")
+
+        if blob_manager_processed is None:
+            blob_manager_processed = BlobManager(container_name="processeddata")
 
         # Check file extension
         file_ext = os.path.splitext(video_url)[1].lower()
@@ -543,7 +554,7 @@ class VideoIndexerManager:
 
         # Create SAS URL for video from raw-data container
         logger.info(f"Creating SAS URL for video from raw-data container: {video_url}")
-        video_sas_url = await blob_manager_read.generate_sas_url(video_url, hours=4)
+        video_sas_url = await blob_manager_raw.generate_sas_url(video_url, hours=4)
 
         if not video_sas_url:
             logger.info(f"Failed to create SAS URL for video: {video_url}")
@@ -572,7 +583,7 @@ class VideoIndexerManager:
                     section_id,
                     file_id,
                     video_name,
-                    merge_segments_duration
+                    blob_manager_processed
                 )
             )
 
@@ -584,7 +595,7 @@ class VideoIndexerManager:
             return None
 
     async def _background_process_video(self, video_id: str, course_id: str, section_id: str, file_id: int,
-                                        video_name: str, merge_segments_duration: Optional[int] = 30):
+                                        video_name: str, blob_manager_processed=None):
         """Background processing of video after upload - runs as async task"""
         try:
             logger.info(f"Background processing started for video: {video_name} (ID: {video_id})")
@@ -605,10 +616,10 @@ class VideoIndexerManager:
             # Extract transcript
             transcript_segments = self.extract_transcript_with_timestamps(index_data)
 
-            # Merge segments if required
-            if merge_segments_duration:
-                logger.info(f"Merging segments to maximum {merge_segments_duration} seconds...")
-                transcript_segments = self.merge_segments_by_duration(transcript_segments, merge_segments_duration)
+            # Merge segments with default 4 minutes (240 seconds)
+            merge_segments_duration = 240  # 4 minutes default
+            logger.info(f"Merging segments to maximum {merge_segments_duration} seconds...")
+            transcript_segments = self.merge_segments_by_duration(transcript_segments, merge_segments_duration)
 
             # Extract metadata
             metadata = self.extract_video_metadata(index_data)
@@ -632,10 +643,13 @@ class VideoIndexerManager:
 
             # Create target path and upload final result
             target_blob_path = f"{course_id}/{section_id}/Videos_md/{file_id}.md"
-            blob_manager_write = BlobManager(container_name="processeddata")
+
+            # Use provided blob manager or create fallback
+            if blob_manager_processed is None:
+                blob_manager_processed = BlobManager(container_name="processeddata")
 
             logger.info(f"Uploading final result to processeddata container: {target_blob_path}")
-            success = await blob_manager_write.upload_text_to_blob(
+            success = await blob_manager_processed.upload_text_to_blob(
                 text_content=md_content,
                 blob_name=target_blob_path
             )
@@ -679,6 +693,7 @@ async def main():
 
     except Exception as e:
         logger.info(f"Error processing video: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

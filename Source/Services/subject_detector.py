@@ -26,16 +26,39 @@ subject_max_video_files = 5
 subject_per_file_chars = 30000
 
 
+
 class SubjectDetector:
     """Identifies subject name and type based on course files analysis"""
 
-    def __init__(self):
-        self.blob_manager = BlobManager(container_name="processeddata")
-        self.client = AsyncAzureOpenAI(
-            api_key=AZURE_OPENAI_API_KEY,
-            api_version=AZURE_OPENAI_API_VERSION,
-            azure_endpoint=AZURE_OPENAI_ENDPOINT
-        )
+    def __init__(self, prompt_loader=None, blob_manager=None, openai_client=None):
+        """
+        Initialize SubjectDetector
+
+        Args:
+            prompt_loader: Shared prompt loader instance (optional)
+            blob_manager: Shared BlobManager instance (optional)
+            openai_client: Shared OpenAI client instance (optional)
+        """
+        # Use provided blob_manager or create fallback instance
+        self.blob_manager = blob_manager if blob_manager is not None else BlobManager(container_name="processeddata")
+
+        # Use provided OpenAI client or create fallback instance
+        if openai_client is not None:
+            self.client = openai_client
+        else:
+            # Create async OpenAI client as fallback
+            self.client = AsyncAzureOpenAI(
+                api_key=AZURE_OPENAI_API_KEY,
+                api_version=AZURE_OPENAI_API_VERSION,
+                azure_endpoint=AZURE_OPENAI_ENDPOINT
+            )
+
+
+        # Use provided prompt_loader or get shared instance
+        self.prompt_loader = prompt_loader
+        if not self.prompt_loader:
+            from Source.Services.prompt_loader import get_prompt_loader
+            self.prompt_loader = get_prompt_loader()
 
     async def detect_subject_info(self, course_path: str) -> Dict[str, str]:
         """
@@ -120,37 +143,30 @@ class SubjectDetector:
         """
         logger.info(f"Analyzing {len(file_contents)} files with LLM")
 
-        # Build prompt with all file contents
-        prompt = """אתה מומחה בזיהוי מקצועות אקדמיים. עליך לנתח את התוכן הבא ולזהות:
-1. שם המקצוע
-2. סוג המקצוע (מתמטי או הומני)
-תוכן הקבצים לניתוח:
-
-"""
-
+        # Build file contents for prompt
+        file_contents_text = ""
         for i, file_info in enumerate(file_contents, 1):
-            prompt += f"\n--- קובץ {i}: {file_info['path']} ---\n"
-            prompt += file_info['content']
-            prompt += "\n" + "=" * 50 + "\n"
+            file_contents_text += f"\n--- קובץ {i}: {file_info['path']} ---\n"
+            file_contents_text += file_info['content']
+            file_contents_text += "\n" + "=" * 50 + "\n"
 
-        prompt += """
-על בסיס התוכן שנותח, החזר אך ורק JSON תקין במבנה הבא בדיוק (ללא טקסט/הסברים נוספים, ללא שדות נוספים):
-{
-  "שם מקצוע": "שם המקצוע בעברית",
-  "סוג מקצוע": "מתמטי|הומני"
-}
+        # Get prompts from prompt loader
+        system_prompt = self.prompt_loader.get_prompt("subject_detection", "System")
+        user_prompt = self.prompt_loader.get_prompt("subject_detection", "User", file_contents=file_contents_text)
 
-תשובה:"""
+        # Prepare messages for LLM
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
 
-        logger.info(f"Sending request to LLM with prompt length: {len(prompt)} characters")
+        logger.info(f"Sending request to LLM with prompt length: {len(user_prompt)} characters")
+        logger.info(f"Final prompt: {messages}")
 
         try:
             response = await self.client.chat.completions.create(
                 model=AZURE_OPENAI_CHAT_COMPLETION_MODEL,
-                messages=[
-                    {"role": "system", "content": "אתה מומחה בזיהוי מקצועות אקדמיים. תמיד השב בפורמט המבוקש בדיוק."},
-                    {"role": "user", "content": prompt}
-                ],
+                messages=messages,
                 max_tokens=100,
                 temperature=0.1
             )

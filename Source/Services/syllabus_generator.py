@@ -26,67 +26,77 @@ class SyllabusGenerator:
     Syllabus generation system for academic courses
     """
 
-    def __init__(self):
+    def __init__(self, prompt_loader=None, blob_manager=None, openai_client=None):
         """
         Initialize syllabus generation system
+
+        Args:
+            prompt_loader: Shared prompt loader instance (optional)
+            blob_manager: Shared BlobManager instance (optional)
+            openai_client: Shared OpenAI client instance (optional)
         """
         self.model_name = AZURE_OPENAI_CHAT_COMPLETION_MODEL
 
-        # Create async OpenAI client
-        self.openai_client = AsyncAzureOpenAI(
-            api_key=AZURE_OPENAI_API_KEY,
-            api_version=AZURE_OPENAI_API_VERSION,
-            azure_endpoint=AZURE_OPENAI_ENDPOINT
-        )
+        # Use provided OpenAI client or create fallback instance
+        if openai_client is not None:
+            self.openai_client = openai_client
+        else:
+            # Create async OpenAI client as fallback
+            self.openai_client = AsyncAzureOpenAI(
+                api_key=AZURE_OPENAI_API_KEY,
+                api_version=AZURE_OPENAI_API_VERSION,
+                azure_endpoint=AZURE_OPENAI_ENDPOINT
+            )
 
-        # Create BlobManager for accessing files in blob storage
-        self.blob_manager = BlobManager()
+        # Use provided blob_manager or create fallback instance
+        self.blob_manager = blob_manager if blob_manager is not None else BlobManager()
+
+        # Use provided prompt_loader (required)
+        if prompt_loader is None:
+            raise ValueError("prompt_loader is required - should be passed as shared instance")
+        self.prompt_loader = prompt_loader
+
         logger.info(f"SyllabusGenerator initialized with model: {self.model_name}")
 
-    def _get_syllabus_prompt(self, subject_name: str = None, subject_type: str = None) -> str:
-        """Prepare prompt for syllabus creation from course summary"""
+    def _get_syllabus_prompts(self, subject_name: str = None, subject_type: str = None,
+                              course_summary_content: str = "") -> tuple:
+        """Prepare system and user prompts for syllabus creation from course summary"""
 
-        # Build subject context
-        subject_context = ""
+        # Determine which section to use based on subject
         if subject_name and subject_type == "מתמטי":
-            subject_context = (
-                f"אתה מומחה בפיתוח סילבוסים אקדמיים לקורסים מתמטיים, ובפרט ל-{subject_name}. "
-                "שלב בהכנת הסילבוס הגדרות מדויקות, מושגים תיאורטיים מרכזיים, אלגוריתמים, "
-                "הוכחות מתמטיות, סדרת תרגילים ודוגמאות יישומיות. "
-            )
+            system_section = "System - מתמטי עם שם מקצוע"
+            user_section = "User - מתמטי עם שם מקצוע"
+            system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section,
+                                                          subject_name=subject_name)
+            user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
+                                                        course_summary_content=course_summary_content)
         elif subject_name and subject_type == "הומני":
-            subject_context = (
-                f"אתה מומחה בפיתוח סילבוסים אקדמיים לקורסים הומניים, ובפרט ל-{subject_name}. "
-                "הסילבוס צריך להדגיש מושגים מרכזיים, הקשרים היסטוריים ותרבותיים, אסכולות מחשבה, "
-                "טקסטים ומקורות ראשוניים מהתחום. "
-            )
+            system_section = "System - הומני עם שם מקצוע"
+            user_section = "User - הומני עם שם מקצוע"
+            system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section,
+                                                          subject_name=subject_name)
+            user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
+                                                        course_summary_content=course_summary_content)
         elif subject_type == "מתמטי":
-            subject_context = (
-                "אתה מומחה בפיתוח סילבוסים אקדמיים לקורסים מתמטיים. "
-                "שלב בהכנת הסילבוס הגדרות מדויקות, מושגים תיאורטיים מרכזיים, אלגוריתמים, "
-                "הוכחות מתמטיות, סדרת תרגילים ודוגמאות יישומיות. "
-            )
+            system_section = "System - מתמטי כללי"
+            user_section = "User - מתמטי כללי"
+            system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section)
+            user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
+                                                        course_summary_content=course_summary_content)
         elif subject_type == "הומני":
-            subject_context = (
-                "אתה מומחה בפיתוח סילבוסים אקדמיים לקורסים הומניים. "
-                "הסילבוס צריך להדגיש מושגים מרכזיים, הקשרים היסטוריים ותרבותיים, אסכולות מחשבה, "
-                "טקסטים ומקורות ראשוניים מהתחום. "
-            )
+            system_section = "System - הומני כללי"
+            user_section = "User - הומני כללי"
+            system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section)
+            user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
+                                                        course_summary_content=course_summary_content)
         else:
-            subject_context = "אתה מומחה בפיתוח סילבוסים אקדמיים למגוון תחומים. "
+            system_section = "System - כללי"
+            user_section = "User - כללי"
+            system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section)
+            user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
+                                                        course_summary_content=course_summary_content)
 
-        return f"""{subject_context}קיבלת סיכום מפורט של קורס אוניברסיטאי שלם.
-    המטרה שלך היא ליצור סילבוס רשמי, מקצועי ומובנה, שישמש גם את המרצה בתכנון ההוראה וגם את הסטודנטים בהבנת מהלך הקורס.
-
-    הנחיות לכתיבה:
-    - כתוב בעברית ברורה ומדויקת
-    - השתמש במינוח אקדמי מותאם לתחום
-    - שמור על מבנה לוגי וברור
-    - הקפד על חלוקה לנושאים/פרקים, תיאור מפורט של כל נושא, הצגת הקשרים בין הנושאים
-    - התבסס על התוכן שסופק, אך הוסף הקשר אקדמי רחב יותר לפי הצורך
-
-    סיכום הקורס:
-    """
+        return system_prompt, user_prompt
 
     async def create_syllabus_from_course_summary(self, full_blob_path: str, subject_name: str = None,
                                                   subject_type: str = None) -> str | None:
@@ -138,8 +148,8 @@ class SyllabusGenerator:
             # Create syllabus
             logger.info(f"Creating syllabus from course summary...")
 
-            # Prepare special prompt for syllabus creation
-            system_prompt = self._get_syllabus_prompt(subject_name, subject_type)
+            # Prepare special prompts for syllabus creation
+            system_prompt, user_prompt = self._get_syllabus_prompts(subject_name, subject_type, course_summary_content)
 
             messages = [
                 {
@@ -148,9 +158,11 @@ class SyllabusGenerator:
                 },
                 {
                     "role": "user",
-                    "content": course_summary_content
+                    "content": user_prompt
                 }
             ]
+
+            logger.info(f"Final prompt: {messages}")
 
             # Call language model
             response = await self.openai_client.chat.completions.create(

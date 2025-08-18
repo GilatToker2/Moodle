@@ -18,8 +18,15 @@ import uvicorn
 from contextlib import asynccontextmanager
 from azure.ai.documentintelligence.aio import DocumentIntelligenceClient
 from azure.core.credentials import AzureKeyCredential
+from openai import AsyncAzureOpenAI
 from Config.logging_config import setup_logging
-from Config.config import AZURE_FORM_RECOGNIZER_KEY, AZURE_FORM_RECOGNIZER_ENDPOINT
+from Config.config import (
+    AZURE_FORM_RECOGNIZER_KEY,
+    AZURE_FORM_RECOGNIZER_ENDPOINT,
+    AZURE_OPENAI_API_KEY,
+    AZURE_OPENAI_ENDPOINT,
+    AZURE_OPENAI_API_VERSION
+)
 # Import modules
 from Source.Services.files_DocAI_processor import document_to_markdown
 from Source.Services.summarizer import ContentSummarizer
@@ -28,6 +35,7 @@ from Source.Services.unified_indexer import index_content_files, UnifiedContentI
 from Source.Services.subject_detector import detect_subject_from_course
 from Source.Services.blob_manager import BlobManager
 from Source.Services.syllabus_generator import SyllabusGenerator
+from Source.Services.prompt_loader import initialize_prompt_loader
 
 # Initialize logger
 logger = setup_logging()
@@ -37,10 +45,6 @@ logger = setup_logging()
 def debug_log(message):
     """Write debug message using proper logging"""
     logger.debug(message)
-
-
-# Global variables to store service instances
-app_services = {}
 
 
 @asynccontextmanager
@@ -59,39 +63,75 @@ async def lifespan(app: FastAPI):
             endpoint=AZURE_FORM_RECOGNIZER_ENDPOINT,
             credential=AzureKeyCredential(AZURE_FORM_RECOGNIZER_KEY)
         )
-        app_services["di_client"] = di_client
+        app.state.di_client = di_client
         logger.info("Document Intelligence Client initialized successfully")
 
-        # Initialize Azure Blob Storage Manager
-        logger.info("Initializing Azure Blob Storage Manager...")
-        blob_manager = BlobManager()
-        app_services["blob_manager"] = blob_manager
-        logger.info("Blob Storage Manager initialized successfully")
+        # Initialize Azure Blob Storage Managers
+        logger.info("Initializing Azure Blob Storage Managers...")
+        blob_manager = BlobManager()  # Default container (processeddata)
+        blob_manager_raw = BlobManager(container_name="raw-data")
+        app.state.blob_manager = blob_manager
+        app.state.blob_manager_raw = blob_manager_raw
+        logger.info("Blob Storage Managers initialized successfully")
 
-        # Initialize Content Summarizer
+        # Initialize and preload all prompts at startup FIRST
+        logger.info("Initializing and preloading all prompts...")
+        prompt_loader = initialize_prompt_loader()
+        app.state.prompt_loader = prompt_loader
+        logger.info("All prompts preloaded successfully")
+
+        # Initialize shared OpenAI client
+        logger.info("Initializing shared OpenAI client...")
+        shared_openai_client = AsyncAzureOpenAI(
+            api_key=AZURE_OPENAI_API_KEY,
+            api_version=AZURE_OPENAI_API_VERSION,
+            azure_endpoint=AZURE_OPENAI_ENDPOINT
+        )
+        app.state.shared_openai_client = shared_openai_client
+        logger.info("Shared OpenAI client initialized successfully")
+
+        # Initialize Content Summarizer (now with shared OpenAI client)
         logger.info("Initializing Content Summarizer...")
-        summarizer = ContentSummarizer()
-        app_services["summarizer"] = summarizer
+        summarizer = ContentSummarizer(
+            prompt_loader=prompt_loader,
+            blob_manager=blob_manager,
+            openai_client=shared_openai_client
+        )
+        app.state.summarizer = summarizer
         logger.info("Content Summarizer initialized successfully")
+
+        # Initialize Subject Detector (also needs shared OpenAI client)
+        logger.info("Initializing Subject Detector...")
+        from Source.Services.subject_detector import SubjectDetector
+        subject_detector = SubjectDetector(
+            prompt_loader=prompt_loader,
+            blob_manager=blob_manager,
+            openai_client=shared_openai_client
+        )
+        app.state.subject_detector = subject_detector
+        logger.info("Subject Detector initialized successfully")
 
         # Initialize Video Indexer Manager
         logger.info("Initializing Video Indexer Manager...")
         video_processor = VideoIndexerManager()
-        app_services["video_processor"] = video_processor
+        app.state.video_processor = video_processor
         logger.info("Video Indexer Manager initialized successfully")
 
-        # Initialize Unified Content Indexer
+        # Initialize Unified Content Indexer (with shared OpenAI client)
         logger.info("Initializing Unified Content Indexer...")
-        content_indexer = UnifiedContentIndexer()
-        app_services["content_indexer"] = content_indexer
+        content_indexer = UnifiedContentIndexer(openai_client=shared_openai_client)
+        app.state.content_indexer = content_indexer
         logger.info("Unified Content Indexer initialized successfully")
 
-        # Initialize Syllabus Generator
+        # Initialize Syllabus Generator (with shared OpenAI client)
         logger.info("Initializing Syllabus Generator...")
-        syllabus_generator = SyllabusGenerator()
-        app_services["syllabus_generator"] = syllabus_generator
+        syllabus_generator = SyllabusGenerator(
+            prompt_loader=prompt_loader,
+            blob_manager=blob_manager,
+            openai_client=shared_openai_client
+        )
+        app.state.syllabus_generator = syllabus_generator
         logger.info("Syllabus Generator initialized successfully")
-
         logger.info("All services initialized successfully - Application ready!")
 
     except Exception as e:
@@ -105,50 +145,78 @@ async def lifespan(app: FastAPI):
     logger.info("App is shutting down - Cleaning up resources...")
 
     try:
+        # First, close the shared OpenAI client (this is the root cause of connection issues)
+        if hasattr(app.state, "shared_openai_client"):
+            shared_openai_client = app.state.shared_openai_client
+            logger.info("Closing shared OpenAI client...")
+            try:
+                await shared_openai_client.close()
+                logger.info("Shared OpenAI client closed successfully")
+            except Exception as e:
+                logger.warning(f"Error closing shared OpenAI client: {e}")
+
         # Close Azure Document Intelligence Client
-        if "di_client" in app_services:
-            di_client = app_services["di_client"]
+        if hasattr(app.state, "di_client"):
+            di_client = app.state.di_client
             logger.info("Closing Document Intelligence Client...")
-            await di_client.close()
-            logger.info("Document Intelligence Client closed")
+            try:
+                await di_client.close()
+                logger.info("Document Intelligence Client closed")
+            except Exception as e:
+                logger.warning(f"Error closing Document Intelligence Client: {e}")
 
         # Close Azure Blob Storage connections
-        if "blob_manager" in app_services:
-            blob_manager = app_services["blob_manager"]
-            if hasattr(blob_manager, '_async_client') and blob_manager._async_client:
-                logger.info("Closing Azure Blob Storage connections...")
-                await blob_manager._async_client.close()
-                logger.info("Blob Storage connections closed")
+        if hasattr(app.state, "blob_manager"):
+            blob_manager = app.state.blob_manager
+            logger.info("Closing Azure Blob Storage connections (processed data)...")
+            try:
+                await blob_manager.close()
+                logger.info("Blob Storage connections (processed data) closed")
+            except Exception as e:
+                logger.warning(f"Error closing Blob Storage connections (processed data): {e}")
 
-        # Close OpenAI client connections in Content Indexer
-        if "content_indexer" in app_services:
-            content_indexer = app_services["content_indexer"]
-            if hasattr(content_indexer, 'openai_client') and content_indexer.openai_client:
-                logger.info("Closing OpenAI client connections...")
-                await content_indexer.openai_client.close()
-                logger.info("OpenAI client connections closed")
+        # Close Azure Blob Storage connections for raw data
+        if hasattr(app.state, "blob_manager_raw"):
+            blob_manager_raw = app.state.blob_manager_raw
+            logger.info("Closing Azure Blob Storage connections (raw data)...")
+            try:
+                await blob_manager_raw.close()
+                logger.info("Blob Storage connections (raw data) closed")
+            except Exception as e:
+                logger.warning(f"Error closing Blob Storage connections (raw data): {e}")
 
-        # Close OpenAI client connections in Summarizer
-        if "summarizer" in app_services:
-            summarizer = app_services["summarizer"]
-            if hasattr(summarizer, 'openai_client') and summarizer.openai_client:
-                logger.info("Closing Summarizer OpenAI connections...")
-                await summarizer.openai_client.close()
-                logger.info("Summarizer OpenAI connections closed")
+        # Clean up services (but don't close shared OpenAI client - already closed above)
+        if hasattr(app.state, "content_indexer"):
+            content_indexer = app.state.content_indexer
+            if hasattr(content_indexer, 'close'):
+                logger.info("Cleaning up Content Indexer...")
+                try:
+                    await content_indexer.close()
+                    logger.info("Content Indexer cleaned up")
+                except Exception as e:
+                    logger.warning(f"Error cleaning up Content Indexer: {e}")
 
-        # Close OpenAI client connections in Syllabus Generator
-        if "syllabus_generator" in app_services:
-            syllabus_generator = app_services["syllabus_generator"]
-            if hasattr(syllabus_generator, 'openai_client') and syllabus_generator.openai_client:
-                logger.info("Closing Syllabus Generator OpenAI connections...")
-                await syllabus_generator.openai_client.close()
-                logger.info("Syllabus Generator OpenAI connections closed")
+        if hasattr(app.state, "summarizer"):
+            summarizer = app.state.summarizer
+            if hasattr(summarizer, 'close'):
+                logger.info("Cleaning up Summarizer...")
+                try:
+                    await summarizer.close()
+                    logger.info("Summarizer cleaned up")
+                except Exception as e:
+                    logger.warning(f"Error cleaning up Summarizer: {e}")
 
-        # Note: VideoIndexerManager doesn't hold persistent connections that need closing
-        # It uses httpx.AsyncClient within context managers for each request
+        # Close Video Indexer Manager connections
+        if hasattr(app.state, "video_processor"):
+            video_processor = app.state.video_processor
+            if hasattr(video_processor, 'close') and callable(video_processor.close):
+                logger.info("Closing Video Indexer Manager...")
+                try:
+                    await video_processor.close()
+                    logger.info("Video Indexer Manager closed")
+                except Exception as e:
+                    logger.warning(f"Error closing Video Indexer Manager: {e}")
 
-        # Clear services dictionary
-        app_services.clear()
         logger.info("All resources cleaned up successfully")
 
     except Exception as e:
@@ -174,31 +242,47 @@ app.add_middleware(
 )
 
 
-# Get services from app_services (initialized in lifespan)
+# Get services from app.state (initialized in lifespan)
 def get_summarizer():
-    return app_services.get("summarizer") or ContentSummarizer()
+    return getattr(app.state, "summarizer", None) or ContentSummarizer()
 
 
 def get_video_processor():
-    return app_services.get("video_processor") or VideoIndexerManager()
+    return getattr(app.state, "video_processor", None) or VideoIndexerManager()
 
 
 def get_blob_manager():
-    return app_services.get("blob_manager") or BlobManager()
+    return getattr(app.state, "blob_manager", None) or BlobManager()
+
+
+def get_blob_manager_raw():
+    return getattr(app.state, "blob_manager_raw", None) or BlobManager(container_name="raw-data")
 
 
 def get_content_indexer():
-    return app_services.get("content_indexer") or UnifiedContentIndexer()
+    return getattr(app.state, "content_indexer", None) or UnifiedContentIndexer()
 
 
 def get_di_client():
     """Get the shared Document Intelligence client"""
-    return app_services.get("di_client")
+    return getattr(app.state, "di_client", None)
 
 
 def get_syllabus_generator():
     """Get the shared Syllabus Generator"""
-    return app_services.get("syllabus_generator") or SyllabusGenerator()
+    return getattr(app.state, "syllabus_generator", None) or SyllabusGenerator()
+
+
+def get_prompt_service():
+    """Get the shared Prompt Loader"""
+    from Source.Services.prompt_loader import get_prompt_loader as fallback_get_prompt_loader
+    return getattr(app.state, "prompt_loader", None) or fallback_get_prompt_loader()
+
+
+def get_subject_detector():
+    """Get the shared Subject Detector"""
+    from Source.Services.subject_detector import SubjectDetector
+    return getattr(app.state, "subject_detector", None) or SubjectDetector()
 
 
 # ================================
@@ -243,7 +327,6 @@ class ProcessVideoRequest(BaseModel):
     file_id: int
     video_name: str
     video_url: str
-    merge_segments_duration: Optional[int] = 30
 
 
 class IndexRequest(BaseModel):
@@ -370,8 +453,10 @@ async def process_document_file(request: ProcessDocumentRequest):
         logger.info(f"CourseID: {request.course_id}, SectionID: {request.section_id}, FileID: {request.file_id}")
         logger.info(f"DocumentURL: {request.document_url}")
 
-        # Get shared Document Intelligence client
+        # Get shared Document Intelligence client and BlobManager instances
         di_client = get_di_client()
+        blob_manager_raw = get_blob_manager_raw()
+        blob_manager_processed = get_blob_manager()
 
         # Process document from blob storage with new parameters
         result_blob_path = await document_to_markdown(
@@ -380,7 +465,9 @@ async def process_document_file(request: ProcessDocumentRequest):
             request.file_id,
             request.document_name,
             request.document_url,
-            di_client
+            di_client,
+            blob_manager_raw=blob_manager_raw,
+            blob_manager_processed=blob_manager_processed
         )
 
         if result_blob_path:
@@ -441,8 +528,7 @@ async def process_video_file(request: ProcessVideoRequest):
         "section_id": "Section1",
         "file_id": 2,
         "video_name": "שיעור ראשון - חתוך",
-        "video_url": "L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4",
-        "merge_segments_duration": 30
+        "video_url": "L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4"
     }
     ```
 
@@ -465,6 +551,10 @@ async def process_video_file(request: ProcessVideoRequest):
         if request.file_id is None or request.file_id < 0:
             raise HTTPException(status_code=422, detail="file_id must be a non-negative integer")
 
+        # Get shared BlobManager instances
+        blob_manager_raw = get_blob_manager_raw()
+        blob_manager_processed = get_blob_manager()
+
         # Start async video processing - returns immediately with target path
         video_processor = get_video_processor()
         result_blob_path = await video_processor.process_video_to_md(
@@ -473,7 +563,8 @@ async def process_video_file(request: ProcessVideoRequest):
             request.file_id,
             request.video_name,
             request.video_url,
-            request.merge_segments_duration
+            blob_manager_raw=blob_manager_raw,
+            blob_manager_processed=blob_manager_processed
         )
 
         if result_blob_path:
@@ -562,7 +653,13 @@ async def insert_to_index(request: IndexRequest, background_tasks: BackgroundTas
                 raise HTTPException(status_code=400, detail=f"Only MD files are supported: {blob_path}")
 
         # Add indexing task to background tasks - no await needed
-        background_tasks.add_task(index_content_files, request.blob_paths, request.create_new_index)
+        background_tasks.add_task(
+            index_content_files,
+            request.blob_paths,
+            request.create_new_index,
+            openai_client=getattr(app.state, "shared_openai_client", None),
+            blob_manager=getattr(app.state, "blob_manager", None),
+        )
 
         # Return immediately
         return {
@@ -937,8 +1034,9 @@ async def detect_subject_type(request: DetectSubjectRequest):
     try:
         logger.info(f"Starting subject type detection for course: {request.course_path}")
 
-        # Call the subject detection function
-        result = await detect_subject_from_course(request.course_path)
+        # Use the shared subject detector instance
+        subject_detector = get_subject_detector()
+        result = await subject_detector.detect_subject_info(request.course_path)
 
         # Check if detection was successful
         if result["name"] == "לא זוהה" or result["type"] == "לא זוהה":
