@@ -340,6 +340,20 @@ class SummarizeRequest(BaseModel):
     subject_type: Optional[str] = None
 
 
+class SummarizeFilesRequest(BaseModel):
+    blob_paths: List[str]
+    subject_name: Optional[str] = None
+    subject_type: Optional[str] = None
+
+
+class SummarizeFilesResponse(BaseModel):
+    success: bool
+    results: Dict[str, Optional[str]]
+    total_processed: int
+    successful: int
+    failed: int
+
+
 class SummarizeSectionRequest(BaseModel):
     full_blob_path: str
     subject_name: Optional[str] = None
@@ -397,6 +411,7 @@ async def root():
             "/insert_to_index - Insert files to search index",
             "/delete_from_index - Delete content from search index",
             "/summarize/md - Create summary from Markdown",
+            "/summarize/md_files - Create summaries from multiple Markdown files (batch)",
             "/summarize/section - Create section summary",
             "/summarize/course - Create course summary",
             "/detect/subject - Detect subject type from course",
@@ -835,6 +850,148 @@ async def summarize_md_file(request: SummarizeRequest):
             "success": False,
             "blob_path": None
         }
+
+
+@app.post(
+    "/summarize/md_files",
+    response_model=SummarizeFilesResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid file type or empty list"},
+        500: {"model": ErrorResponse, "description": "Batch summarization failed"}
+    },
+    tags=["Summarization"]
+)
+async def summarize_md_files(request: SummarizeFilesRequest, background_tasks: BackgroundTasks):
+    """
+    Create Summaries from Multiple Markdown Files in Blob Storage (Batch Processing)
+
+    **Function Description:**
+    Generates LLM-based summaries from multiple Markdown files stored in blob storage with asynchronous processing and queue management, similar to the insert_to_index function.
+
+    **What to Expect:**
+    • Downloads multiple MD files from blob storage in batches
+    • Automatically detects content type from path structure (Videos_md = video, Docs_md = document)
+    • Processes files asynchronously with controlled concurrency
+    • Uses subject-aware prompts for each file
+    • Returns comprehensive summaries tailored to subject type
+    • Uses Azure OpenAI for intelligent summarization
+    • Saves summaries back to blob storage in CourseID/SectionID/file_summaries/FileID.md
+    • Processing continues in background with detailed logging
+
+    **Request Body Examples:**
+
+    **Example 1 - Multiple Files with Subject Parameters:**
+    ```json
+    {
+        "blob_paths": [
+            "Discrete_mathematics/Section2/Videos_md/2.md",
+            "Discrete_mathematics/Section2/Docs_md/1.md",
+            "Discrete_mathematics/Section2/Videos_md/3.md"
+        ],
+        "subject_name": "מתמטיקה בדידה",
+        "subject_type": "מתמטי"
+    }
+    ```
+
+    **Parameters:**
+    - **blob_paths** (required): List of paths to MD files in blob storage
+    - **subject_name** (optional): Name of the subject for context (e.g., "מתמטיקה בדידה", "פיזיקה", "היסטוריה")
+    - **subject_type** (optional): Type of subject for prompt customization:
+      - "מתמטי": For math, physics, computer science, engineering (includes formulas, proofs, algorithms)
+      - "הומני": For humanities, history, literature, philosophy (includes concepts, arguments, examples)
+
+    **Content Type Detection:**
+    - Files in 'Videos_md' folders → treated as video transcripts
+    - Files in 'Docs_md' folders → treated as document content
+
+    **Returns:**
+    - success: Boolean indicating if the batch processing started successfully
+    - results: Dictionary mapping original blob paths to summary paths (empty initially, populated during processing)
+    - total_processed: Number of files that will be processed
+    - successful: Number of files successfully processed (0 initially)
+    - failed: Number of files that failed processing (0 initially)
+
+    **Note:** This endpoint returns immediately after starting the batch process. Check logs for detailed progress and results.
+    """
+    try:
+        # Validate blob paths
+        if not request.blob_paths:
+            raise HTTPException(status_code=400, detail="Blob paths list cannot be empty")
+
+        # Check all files are MD
+        md_files = []
+        for blob_path in request.blob_paths:
+            if blob_path.lower().endswith('.md'):
+                md_files.append(blob_path)
+            else:
+                logger.warning(f"Skipping non-MD file: {blob_path}")
+
+        if not md_files:
+            raise HTTPException(status_code=400, detail="No MD files found in the provided list")
+
+        logger.info(f"Starting batch summarization for {len(md_files)} MD files")
+        logger.info(f"Subject: {request.subject_name} ({request.subject_type})")
+
+        # Add summarization task to background tasks
+        background_tasks.add_task(
+            _batch_summarize_files,
+            md_files,
+            request.subject_name,
+            request.subject_type
+        )
+
+        # Return immediately with initial response
+        return SummarizeFilesResponse(
+            success=True,
+            results={},  # Will be populated during processing
+            total_processed=len(md_files),
+            successful=0,  # Will be updated during processing
+            failed=0  # Will be updated during processing
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error starting batch summarization: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error starting batch summarization: {str(e)}")
+
+
+async def _batch_summarize_files(blob_paths: List[str], subject_name: str = None, subject_type: str = None):
+    """
+    Background task for batch summarization
+    """
+    try:
+        logger.info(f"Background batch summarization started for {len(blob_paths)} files")
+
+        # Get summarizer instance
+        summarizer = get_summarizer()
+
+        # Use the new batch summarization method
+        results = await summarizer.summarize_md_files(
+            blob_paths=blob_paths,
+            subject_name=subject_name,
+            subject_type=subject_type
+        )
+
+        # Log final results
+        successful = sum(1 for result in results.values() if result is not None)
+        failed = len(results) - successful
+
+        logger.info(f"Batch summarization completed!")
+        logger.info(f"Total files: {len(blob_paths)}")
+        logger.info(f"Successful: {successful}")
+        logger.info(f"Failed: {failed}")
+        logger.info(f"Success rate: {(successful / len(blob_paths) * 100):.1f}%")
+
+        # Log individual results
+        for blob_path, summary_path in results.items():
+            if summary_path:
+                logger.info(f"✓ {blob_path} -> {summary_path}")
+            else:
+                logger.warning(f"✗ {blob_path} -> Failed")
+
+    except Exception as e:
+        logger.error(f"Error in background batch summarization: {str(e)}")
 
 
 @app.post(

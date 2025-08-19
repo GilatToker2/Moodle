@@ -6,7 +6,7 @@ Uses Azure OpenAI language model to create customized summaries
 import os
 import asyncio
 import traceback
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from openai import AsyncAzureOpenAI
 from Config.config import (
     AZURE_OPENAI_API_KEY,
@@ -452,6 +452,103 @@ class ContentSummarizer:
 
         except Exception as e:
             logger.info(f"Error saving summary to blob: {str(e)}")
+            return None
+
+    async def summarize_md_files(self, blob_paths: List[str], subject_name: str = None, subject_type: str = None) -> Dict[str, str]:
+        """
+        Summarize multiple MD files from blob storage with asynchronous processing and queue management
+        Similar to insert_to_index function but for summarization
+
+        Args:
+            blob_paths: List of paths to MD files in blob storage
+            subject_name: Subject name for context
+            subject_type: Subject type for context
+
+        Returns:
+            Dictionary mapping original blob paths to summary paths (or None if failed)
+        """
+        logger.info(f"Starting batch summarization of {len(blob_paths)} files")
+        logger.info(f"Subject: {subject_name} ({subject_type})")
+
+        # Validate input
+        if not blob_paths:
+            logger.warning("Empty blob paths list provided")
+            return {}
+
+        # Check all files are MD
+        for blob_path in blob_paths:
+            if not blob_path.lower().endswith('.md'):
+                logger.warning(f"Skipping non-MD file: {blob_path}")
+
+        # Filter only MD files
+        md_files = [path for path in blob_paths if path.lower().endswith('.md')]
+        if not md_files:
+            logger.error("No MD files found in the provided list")
+            return {}
+
+        logger.info(f"Processing {len(md_files)} MD files")
+
+        # Process files in small batches with concurrency control
+        batch_size = 3  # Small batches to avoid overwhelming the system
+        results = {}
+        total_processed = 0
+        total_successful = 0
+        total_failed = 0
+
+        logger.info(f"Processing in batches of {batch_size} files")
+
+        for i in range(0, len(md_files), batch_size):
+            batch = md_files[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            total_batches = (len(md_files) + batch_size - 1) // batch_size
+
+            logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} files)")
+
+            # Process batch with controlled concurrency
+            batch_results = await asyncio.gather(
+                *[self._process_single_file_safe(blob_path, subject_name, subject_type) for blob_path in batch],
+                return_exceptions=True
+            )
+
+            # Collect results from batch
+            for blob_path, result in zip(batch, batch_results):
+                total_processed += 1
+                if isinstance(result, Exception):
+                    logger.error(f"Error processing {blob_path}: {result}")
+                    results[blob_path] = None
+                    total_failed += 1
+                elif result:
+                    logger.info(f"Successfully processed {blob_path} -> {result}")
+                    results[blob_path] = result
+                    total_successful += 1
+                else:
+                    logger.warning(f"Failed to process {blob_path}")
+                    results[blob_path] = None
+                    total_failed += 1
+
+            # Small delay between batches to prevent overwhelming the system
+            if i + batch_size < len(md_files):
+                logger.info(f"Waiting 2 seconds before next batch...")
+                await asyncio.sleep(2)
+
+        # Final summary
+        logger.info(f"Batch summarization completed!")
+        logger.info(f"   Files processed: {total_processed}")
+        logger.info(f"   Successful: {total_successful}")
+        logger.info(f"   Failed: {total_failed}")
+        logger.info(f"   Success rate: {(total_successful/total_processed*100):.1f}%" if total_processed > 0 else "   Success rate: 0%")
+
+        return results
+
+    async def _process_single_file_safe(self, blob_path: str, subject_name: str = None, subject_type: str = None) -> str | None:
+        """
+        Safely process a single file with error handling
+        Returns summary path or None if failed
+        """
+        try:
+            return await self.summarize_md_file(blob_path, subject_name, subject_type)
+        except Exception as e:
+            logger.error(f"Error processing file {blob_path}: {e}")
             return None
 
     async def summarize_section_from_blob(self, full_blob_path: str, subject_name: str = None,
