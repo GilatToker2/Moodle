@@ -100,6 +100,7 @@ class ContentSummarizer:
                                     previous_summary: str = None) -> str:
         """Prepare prompt for complete Section summarization"""
 
+
         # Check if we have actual previous summary content
         has_previous_summary = previous_summary and previous_summary.strip()
 
