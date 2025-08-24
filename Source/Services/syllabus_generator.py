@@ -64,34 +64,34 @@ class SyllabusGenerator:
 
         # Determine which section to use based on subject
         if subject_name and subject_type == "מתמטי":
-            system_section = "System - מתמטי עם שם מקצוע"
-            user_section = "User - מתמטי עם שם מקצוע"
+            system_section = "System – Math – Subject_name"
+            user_section = "User – Math – Subject_name"
             system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section,
                                                           subject_name=subject_name)
             user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
                                                         course_summary_content=course_summary_content)
         elif subject_name and subject_type == "הומני":
-            system_section = "System - הומני עם שם מקצוע"
-            user_section = "User - הומני עם שם מקצוע"
+            system_section = "System – Humanities – Subject_name"
+            user_section = "User – Humanities – Subject_name"
             system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section,
                                                           subject_name=subject_name)
             user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
                                                         course_summary_content=course_summary_content)
         elif subject_type == "מתמטי":
-            system_section = "System - מתמטי כללי"
-            user_section = "User - מתמטי כללי"
+            system_section = "System – Math – General"
+            user_section = "User – Math – General"
             system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section)
             user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
                                                         course_summary_content=course_summary_content)
         elif subject_type == "הומני":
-            system_section = "System - הומני כללי"
-            user_section = "User - הומני כללי"
+            system_section = "System – Humanities – General"
+            user_section = "User – Humanities – General"
             system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section)
             user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
                                                         course_summary_content=course_summary_content)
         else:
-            system_section = "System - כללי"
-            user_section = "User - כללי"
+            system_section = "System – General"
+            user_section = "User – General"
             system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section)
             user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
                                                         course_summary_content=course_summary_content)
