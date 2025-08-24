@@ -73,33 +73,31 @@ class ContentSummarizer:
             Formatted prompt string
         """
 
-
         # Determine which section to use based on subject and input type
         if subject_name and subject_type == "מתמטי":
-            section = f"System - מתמטי עם שם מקצוע - {'וידאו' if input_type == 'video' else 'קובץ'}"
+            section = f"System – Math – Subject_name – {'Video' if input_type == 'video' else 'File'}"
             logger.info(f"DEBUG: Looking for section: {section}")
             prompt = self.prompt_loader.get_prompt("file_summarization", section,
                                           subject_name=subject_name)
             logger.info(f"DEBUG: Got prompt length: {len(prompt)}")
             return prompt
         elif subject_name and subject_type == "הומני":
-            section = f"System - הומני עם שם מקצוע - {'וידאו' if input_type == 'video' else 'קובץ'}"
+            section = f"System – Humanities – Subject_name – {'Video' if input_type == 'video' else 'File'}"
             return self.prompt_loader.get_prompt("file_summarization", section,
                                             subject_name=subject_name)
         elif subject_type == "מתמטי":
-            section = f"System - מתמטי כללי - {'וידאו' if input_type == 'video' else 'קובץ'}"
+            section = f"System – General Math – {'Video' if input_type == 'video' else 'File'}"
             return self.prompt_loader.get_prompt("file_summarization", section)
         elif subject_type == "הומני":
-            section = f"System - הומני כללי - {'וידאו' if input_type == 'video' else 'קובץ'}"
+            section = f"System - General Humanities – {'Video' if input_type == 'video' else 'File'}"
             return self.prompt_loader.get_prompt("file_summarization", section)
         else:
-            section = f"System - כללי - {'וידאו' if input_type == 'video' else 'קובץ'}"
+            section = f"System – General – {'Video' if input_type == 'video' else 'File'}"
             return self.prompt_loader.get_prompt("file_summarization", section)
 
     def _get_section_summary_prompt(self, subject_name: str = None, subject_type: str = None,
                                     previous_summary: str = None) -> str:
         """Prepare prompt for complete Section summarization"""
-
 
         # Check if we have actual previous summary content
         has_previous_summary = previous_summary and previous_summary.strip()
@@ -108,15 +106,15 @@ class ContentSummarizer:
         if has_previous_summary:
             # With previous summary versions
             if subject_name and subject_type == "מתמטי":
-                section = "System - מתמטי עם שם מקצוע - עם סיכום קודם"
+                section = "System – Math – Subject_name – previous_summary"
             elif subject_name and subject_type == "הומני":
-                section = "System - הומני עם שם מקצוע - עם סיכום קודם"
+                section = "System – Humanities – Subject_name – previous_summary"
             elif subject_type == "מתמטי":
-                section = "System - מתמטי כללי - עם סיכום קודם"
+                section = "System - Math – General – previous_summary"
             elif subject_type == "הומני":
-                section = "System - הומני כללי - עם סיכום קודם"
+                section = "System - Humanities – General – previous_summary"
             else:
-                section = "System - כללי - עם סיכום קודם"
+                section = "System - General – previous_summary"
 
             return self.prompt_loader.get_prompt("section_summarization", section,
                                                  subject_name=subject_name,
@@ -124,15 +122,15 @@ class ContentSummarizer:
         else:
             # Without previous summary versions
             if subject_name and subject_type == "מתמטי":
-                section = "System - מתמטי עם שם מקצוע"
+                section = "System – Math – Subject_name"
             elif subject_name and subject_type == "הומני":
-                section = "System - הומני עם שם מקצוע"
+                section = "System – Humanities – Subject_name"
             elif subject_type == "מתמטי":
-                section = "System - מתמטי כללי"
+                section = "System - Math – General"
             elif subject_type == "הומני":
-                section = "System - הומני כללי"
+                section = "System – Humanities – General"
             else:
-                section = "System - כללי"
+                section = "System - General"
 
             return self.prompt_loader.get_prompt("section_summarization", section,
                                                  subject_name=subject_name)
@@ -142,21 +140,21 @@ class ContentSummarizer:
 
         # Determine which section to use based on subject and input type
         if subject_name and subject_type == "מתמטי":
-            section = "System - מתמטי עם שם מקצוע"
+            section = "System – Math – Subject_name"
             prompt = self.prompt_loader.get_prompt("course_summarization", section,
                                               subject_name=subject_name)
         elif subject_name and subject_type == "הומני":
-            section = "System - הומני עם שם מקצוע"
+            section = "System – Humanities – Subject_name"
             prompt = self.prompt_loader.get_prompt("course_summarization", section,
                                               subject_name=subject_name)
         elif subject_type == "מתמטי":
-            section = "System - מתמטי כללי"
+            section = "System - Math – General"
             prompt = self.prompt_loader.get_prompt("course_summarization", section)
         elif subject_type == "הומני":
-            section = "System - הומני כללי"
+            section = "System - Humanities – General"
             prompt = self.prompt_loader.get_prompt("course_summarization", section)
         else:
-            section = "System - כללי"
+            section = "System - General"
             prompt = self.prompt_loader.get_prompt("course_summarization", section)
 
         return prompt

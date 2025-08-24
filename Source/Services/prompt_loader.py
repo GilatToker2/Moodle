@@ -128,33 +128,15 @@ class PromptLoader:
 
         Args:
             prompt_type: Type of prompt (subject_detection, syllabus_generation, etc.)
-            section: Section name from MD file (can be complex like "system - מתמטי עם שם מקצוע")
+            section: Section name from MD file (can be complex like "System – Math – Subject_name")
             reload: Force reload from disk if True
             **kwargs: Variables to format into the prompt
 
         Returns:
             Formatted prompt string
         """
-        # Normalize section to lowercase for lookup
+        # Use the section as provided - it should already be in the correct format
         section_key = section.lower()
-
-        # If we have subject_type, try to build the appropriate section name
-        if 'subject_type' in kwargs:
-            subject_type = kwargs.get('subject_type', '').lower()
-            subject_name = kwargs.get('subject_name', '')
-
-            # Try different section name patterns based on subject type and name
-            if subject_type == 'מתמטי' and subject_name:
-                section_key = f"{section} - מתמטי עם שם מקצוע"
-            elif subject_type == 'הומני' and subject_name:
-                section_key = f"{section} - הומני עם שם מקצוע"
-            elif subject_type == 'מתמטי':
-                section_key = f"{section} - מתמטי כללי"
-            elif subject_type == 'הומני':
-                section_key = f"{section} - הומני כללי"
-
-        # Normalize to lowercase for cache lookup
-        section_key = section_key.lower()
 
         # Map prompt types to file names - with aliases for backward compatibility
         prompt_files = {
@@ -307,4 +289,3 @@ if __name__ == "__main__":
 
     print(f"\nCache Status: {loader.get_cache_status()}")
     print("\nPrompt Loader test completed successfully!")
-
