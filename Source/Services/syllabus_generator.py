@@ -63,27 +63,28 @@ class SyllabusGenerator:
         """Prepare system and user prompts for syllabus creation from course summary"""
 
         # Determine which section to use based on subject
-        if subject_name and subject_type == "מתמטי":
+        # Support both Hebrew and English subject types
+        if subject_name and subject_type in ["מתמטי", "Mathematics", "Mathematical"]:
             system_section = "System – Math – Subject_name"
             user_section = "User – Math – Subject_name"
             system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section,
                                                           subject_name=subject_name)
             user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
                                                         course_summary_content=course_summary_content)
-        elif subject_name and subject_type == "הומני":
+        elif subject_name and subject_type in ["הומני", "Humanities", "Humanistic"]:
             system_section = "System – Humanities – Subject_name"
             user_section = "User – Humanities – Subject_name"
             system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section,
                                                           subject_name=subject_name)
             user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
                                                         course_summary_content=course_summary_content)
-        elif subject_type == "מתמטי":
+        elif subject_type in ["מתמטי", "Mathematics", "Mathematical"]:
             system_section = "System – Math – General"
             user_section = "User – Math – General"
             system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section)
             user_prompt = self.prompt_loader.get_prompt("syllabus_generation", user_section,
                                                         course_summary_content=course_summary_content)
-        elif subject_type == "הומני":
+        elif subject_type in ["הומני", "Humanities", "Humanistic"]:
             system_section = "System – Humanities – General"
             user_section = "User – Humanities – General"
             system_prompt = self.prompt_loader.get_prompt("syllabus_generation", system_section)

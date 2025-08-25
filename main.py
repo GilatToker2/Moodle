@@ -454,7 +454,7 @@ async def process_document_file(request: ProcessDocumentRequest):
         "course_id": "CS101",
         "section_id": "Section1",
         "file_id": 1,
-        "document_name": "בדידה תרגול 02",
+        "document_name": "Discrete Math Exercise 02",
         "document_url": "bdida_tirgul_02.pdf"
     }
     ```
@@ -530,7 +530,7 @@ async def process_video_file(request: ProcessVideoRequest):
     • Video is processed from blob storage using Video Indexer
     • Automatic Hebrew transcription with timestamps
     • AI-powered extraction of keywords and topics
-    • Subject type classification ("הומני" or "מתמטי")
+    • Subject type classification ("Humanities" or "Mathematics")
     • Short automatic lesson summary generation
     • Full transcript with precise timestamps
     • Saves markdown to blob storage with new structure: CourseID/SectionID/Videos_md/FileID.md
@@ -542,7 +542,7 @@ async def process_video_file(request: ProcessVideoRequest):
         "course_id": "CS101",
         "section_id": "Section1",
         "file_id": 2,
-        "video_name": "שיעור ראשון - חתוך",
+        "video_name": "First Lesson - Trimmed",
         "video_url": "L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4"
     }
     ```
@@ -797,18 +797,18 @@ async def summarize_md_file(request: SummarizeRequest):
     ```json
     {
         "blob_path": "Discrete_mathematics/Section2/Videos_md/2.md",
-        "subject_name": "מתמטיקה בדידה",
-        "subject_type": "מתמטי"
+        "subject_name": "Discrete Mathematics",
+        "subject_type": "Mathematics"
     }
     ```
 
 
     **Parameters:**
     - **blob_path** (required): Path to MD file in blob storage
-    - **subject_name** (optional): Name of the subject for context (e.g., "מתמטיקה בדידה", "פיזיקה", "היסטוריה")
+    - **subject_name** (optional): Name of the subject for context (e.g., "Discrete Mathematics", "Physics", "History")
     - **subject_type** (optional): Type of subject for prompt customization:
-      - "מתמטי": For math, physics, computer science, engineering (includes formulas, proofs, algorithms)
-      - "הומני": For humanities, history, literature, philosophy (includes concepts, arguments, examples)
+      - "Mathematics": For math, physics, computer science, engineering (includes formulas, proofs, algorithms)
+      - "Humanities": For humanities, history, literature, philosophy (includes concepts, arguments, examples)
 
     **Content Type Detection:**
     - Files in 'Videos_md' folders → treated as video transcripts
@@ -888,17 +888,17 @@ async def summarize_md_files(request: SummarizeFilesRequest, background_tasks: B
             "Discrete_mathematics/Section2/Docs_md/1.md",
             "Discrete_mathematics/Section2/Videos_md/3.md"
         ],
-        "subject_name": "מתמטיקה בדידה",
-        "subject_type": "מתמטי"
+        "subject_name": "Discrete Mathematics",
+        "subject_type": "Mathematics"
     }
     ```
 
     **Parameters:**
     - **blob_paths** (required): List of paths to MD files in blob storage
-    - **subject_name** (optional): Name of the subject for context (e.g., "מתמטיקה בדידה", "פיזיקה", "היסטוריה")
+    - **subject_name** (optional): Name of the subject for context (e.g., "Discrete Mathematics", "Physics", "History")
     - **subject_type** (optional): Type of subject for prompt customization:
-      - "מתמטי": For math, physics, computer science, engineering (includes formulas, proofs, algorithms)
-      - "הומני": For humanities, history, literature, philosophy (includes concepts, arguments, examples)
+      - "Mathematics": For math, physics, computer science, engineering (includes formulas, proofs, algorithms)
+      - "Humanities": For humanities, history, literature, philosophy (includes concepts, arguments, examples)
 
     **Content Type Detection:**
     - Files in 'Videos_md' folders → treated as video transcripts
@@ -1024,8 +1024,8 @@ async def summarize_section_from_blob(request: SummarizeSectionRequest):
     ```json
     {
         "full_blob_path": "Discrete_mathematics/Section2/file_summaries",
-        "subject_name": "מתמטיקה בדידה",
-        "subject_type": "מתמטי"
+        "subject_name": "Discrete Mathematics",
+        "subject_type": "Mathematics"
     }
     ```
 
@@ -1033,8 +1033,8 @@ async def summarize_section_from_blob(request: SummarizeSectionRequest):
     ```json
     {
         "full_blob_path": "Discrete_mathematics/Section2/file_summaries",
-        "subject_name": "מתמטיקה בדידה",
-        "subject_type": "מתמטי",
+        "subject_name": "Discrete Mathematics",
+        "subject_type": "Mathematics",
         "previous_summary_path": "Discrete_mathematics/section_summaries/Section1.md"
     }
     ```
@@ -1042,7 +1042,7 @@ async def summarize_section_from_blob(request: SummarizeSectionRequest):
     **Parameters:**
     - **full_blob_path** (required): Path to file_summaries folder in blob storage
     - **subject_name** (optional): Name of the subject for context
-    - **subject_type** (optional): Type of subject for prompt customization ("מתמטי" or "הומני")
+    - **subject_type** (optional): Type of subject for prompt customization ("Mathematics" or "Humanities")
     - **previous_summary_path** (optional): Path to previous section summary file for context and continuity
 
     **Returns:**
@@ -1106,15 +1106,15 @@ async def summarize_course_from_blob(request: SummarizeCourseRequest):
     ```json
     {
         "full_blob_path": "Discrete_mathematics/section_summaries",
-        "subject_name": "מתמטיקה בדידה",
-        "subject_type": "מתמטי"
+        "subject_name": "Discrete Mathematics",
+        "subject_type": "Mathematics"
     }
     ```
 
     **Parameters:**
     - **full_blob_path** (required): Path to section_summaries folder in blob storage
     - **subject_name** (optional): Name of the subject for context
-    - **subject_type** (optional): Type of subject for prompt customization ("מתמטי" or "הומני")
+    - **subject_type** (optional): Type of subject for prompt customization ("Mathematics" or "Humanities")
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
@@ -1173,8 +1173,8 @@ async def detect_subject_type(request: DetectSubjectRequest):
     • Returns both subject name and classification
 
     **Subject Classification:**
-    - **מתמטי**: Mathematics, Physics, Computer Science, Engineering, Statistics, Logic, Algorithms
-    - **הומני**: Literature, History, Philosophy, Psychology, Sociology, Arts, Languages
+    - **Mathematics**: Mathematics, Physics, Computer Science, Engineering, Statistics, Logic, Algorithms
+    - **Humanities**: Literature, History, Philosophy, Psychology, Sociology, Arts, Languages
 
     **Request Body Example:**
     ```json
@@ -1185,8 +1185,8 @@ async def detect_subject_type(request: DetectSubjectRequest):
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
-    - subject_name: Name of the detected subject (e.g., "מדעי המחשב")
-    - subject_type: Detected subject type ("מתמטי", "הומני", or "לא זוהה")
+    - subject_name: Name of the detected subject (e.g., "Computer Science" or "מדעי המחשב")
+    - subject_type: Detected subject type ("Mathematics", "Humanities", or "Not detected")
     """
     try:
         logger.info(f"Starting subject type detection for course: {request.course_path}")
@@ -1196,7 +1196,7 @@ async def detect_subject_type(request: DetectSubjectRequest):
         result = await subject_detector.detect_subject_info(request.course_path)
 
         # Check if detection was successful
-        if result["name"] == "לא זוהה" or result["type"] == "לא זוהה":
+        if result["name"] == "Not detected" or result["type"] == "Not detected":
             # Check if it's because no files were found
             raise HTTPException(
                 status_code=404,
@@ -1252,8 +1252,8 @@ async def create_syllabus_from_course_summary(request: CreateSyllabusRequest):
     ```json
     {
         "full_blob_path": "Intro_to_medieval_history/course_summary.md",
-        "subject_name": "מבוא לימי הביניים",
-        "subject_type": "הומני"
+        "subject_name": "Introduction to Medieval History",
+        "subject_type": "Humanities"
     }
     ```
 
@@ -1261,8 +1261,8 @@ async def create_syllabus_from_course_summary(request: CreateSyllabusRequest):
     - **full_blob_path** (required): Path to course summary file (must end with '/course_summary.md')
     - **subject_name** (optional): Name of the subject for context
     - **subject_type** (optional): Type of subject for prompt customization:
-      - "מתמטי": For math, physics, computer science, engineering
-      - "הומני": For humanities, history, literature, philosophy
+      - "Mathematics": For math, physics, computer science, engineering
+      - "Humanities": For humanities, history, literature, philosophy
 
     **Returns:**
     - success: Boolean indicating if the operation was successful

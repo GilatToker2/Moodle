@@ -74,21 +74,22 @@ class ContentSummarizer:
         """
 
         # Determine which section to use based on subject and input type
-        if subject_name and subject_type == "מתמטי":
+        # Support both Hebrew and English subject types
+        if subject_name and subject_type in ["מתמטי", "Mathematics", "Mathematical"]:
             section = f"System – Math – Subject_name – {'Video' if input_type == 'video' else 'File'}"
             logger.info(f"DEBUG: Looking for section: {section}")
             prompt = self.prompt_loader.get_prompt("file_summarization", section,
                                           subject_name=subject_name)
             logger.info(f"DEBUG: Got prompt length: {len(prompt)}")
             return prompt
-        elif subject_name and subject_type == "הומני":
+        elif subject_name and subject_type in ["הומני", "Humanities", "Humanistic"]:
             section = f"System – Humanities – Subject_name – {'Video' if input_type == 'video' else 'File'}"
             return self.prompt_loader.get_prompt("file_summarization", section,
                                             subject_name=subject_name)
-        elif subject_type == "מתמטי":
+        elif subject_type in ["מתמטי", "Mathematics", "Mathematical"]:
             section = f"System – General Math – {'Video' if input_type == 'video' else 'File'}"
             return self.prompt_loader.get_prompt("file_summarization", section)
-        elif subject_type == "הומני":
+        elif subject_type in ["הומני", "Humanities", "Humanistic"]:
             section = f"System - General Humanities – {'Video' if input_type == 'video' else 'File'}"
             return self.prompt_loader.get_prompt("file_summarization", section)
         else:
@@ -103,15 +104,16 @@ class ContentSummarizer:
         has_previous_summary = previous_summary and previous_summary.strip()
 
         # Build section name based on subject and whether we have previous summary
+        # Support both Hebrew and English subject types
         if has_previous_summary:
             # With previous summary versions
-            if subject_name and subject_type == "מתמטי":
+            if subject_name and subject_type in ["מתמטי", "Mathematics", "Mathematical"]:
                 section = "System – Math – Subject_name – previous_summary"
-            elif subject_name and subject_type == "הומני":
+            elif subject_name and subject_type in ["הומני", "Humanities", "Humanistic"]:
                 section = "System – Humanities – Subject_name – previous_summary"
-            elif subject_type == "מתמטי":
+            elif subject_type in ["מתמטי", "Mathematics", "Mathematical"]:
                 section = "System - Math – General – previous_summary"
-            elif subject_type == "הומני":
+            elif subject_type in ["הומני", "Humanities", "Humanistic"]:
                 section = "System - Humanities – General – previous_summary"
             else:
                 section = "System - General – previous_summary"
@@ -121,13 +123,13 @@ class ContentSummarizer:
                                                  previous_summary=previous_summary)
         else:
             # Without previous summary versions
-            if subject_name and subject_type == "מתמטי":
+            if subject_name and subject_type in ["מתמטי", "Mathematics", "Mathematical"]:
                 section = "System – Math – Subject_name"
-            elif subject_name and subject_type == "הומני":
+            elif subject_name and subject_type in ["הומני", "Humanities", "Humanistic"]:
                 section = "System – Humanities – Subject_name"
-            elif subject_type == "מתמטי":
+            elif subject_type in ["מתמטי", "Mathematics", "Mathematical"]:
                 section = "System - Math – General"
-            elif subject_type == "הומני":
+            elif subject_type in ["הומני", "Humanities", "Humanistic"]:
                 section = "System – Humanities – General"
             else:
                 section = "System - General"
@@ -139,18 +141,19 @@ class ContentSummarizer:
         """Prepare prompt for reorganizing complete course content"""
 
         # Determine which section to use based on subject and input type
-        if subject_name and subject_type == "מתמטי":
+        # Support both Hebrew and English subject types
+        if subject_name and subject_type in ["מתמטי", "Mathematics", "Mathematical"]:
             section = "System – Math – Subject_name"
             prompt = self.prompt_loader.get_prompt("course_summarization", section,
                                               subject_name=subject_name)
-        elif subject_name and subject_type == "הומני":
+        elif subject_name and subject_type in ["הומני", "Humanities", "Humanistic"]:
             section = "System – Humanities – Subject_name"
             prompt = self.prompt_loader.get_prompt("course_summarization", section,
                                               subject_name=subject_name)
-        elif subject_type == "מתמטי":
+        elif subject_type in ["מתמטי", "Mathematics", "Mathematical"]:
             section = "System - Math – General"
             prompt = self.prompt_loader.get_prompt("course_summarization", section)
-        elif subject_type == "הומני":
+        elif subject_type in ["הומני", "Humanities", "Humanistic"]:
             section = "System - Humanities – General"
             prompt = self.prompt_loader.get_prompt("course_summarization", section)
         else:

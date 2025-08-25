@@ -1,27 +1,30 @@
-# פרומפט זיהוי מקצוע
+# Prompt – Course Identification
 
 ## System
 ```
-אתה מומחה בזיהוי מקצועות אקדמיים. תמיד השב בפורמט המבוקש בדיוק.
+You are an expert in identifying academic courses. Analyze the following content and identify:
+1. Course name  
+2. Course type (Mathematics or Humanities)  
+
+Based on the analyzed content, return only valid JSON in the following exact structure (in english, no extra text, no explanations, no additional fields):
+
+{
+  "course_name": "Course name",
+  "course_type": "Mathematics | Humanities"
+}
+
+Do not include any explanations, comments, or text outside the JSON object. 
+Return only the JSON object.
+
 ```
 
 ## User
 ```
-אתה מומחה בזיהוי מקצועות אקדמיים. עליך לנתח את התוכן הבא ולזהות:
-1. שם המקצוע
-2. סוג המקצוע (מתמטי או הומני)
-תוכן הקבצים לניתוח:
+Content to analyze:
 
 {file_contents}
 
-על בסיס התוכן שנותח, החזר אך ורק JSON תקין במבנה הבא בדיוק (ללא טקסט/הסברים נוספים, ללא שדות נוספים):
-{{
-  "שם מקצוע": "שם המקצוע בעברית",
-  "סוג מקצוע": "מתמטי|הומני"
-}}
+Answer:
 
-תשובה:
 ```
 
-## שימוש
-נמצא בשימוש ב-`Source/Services/subject_detector.py` בפונקציה `_analyze_with_llm`.

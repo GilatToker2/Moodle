@@ -84,7 +84,7 @@ class SubjectDetector:
 
         if not course_md_files:
             logger.info(f"No MD files found in course: {course_path}")
-            return {"name": "לא זוהה", "type": "לא זוהה"}
+            return {"name": "Not detected", "type": "Not detected"}
 
         logger.info(f"Found {len(course_md_files)} MD files in course")
 
@@ -126,7 +126,7 @@ class SubjectDetector:
 
         if not file_contents:
             logger.info("No readable content found")
-            return {"name": "לא זוהה", "type": "לא זוהה"}
+            return {"name": "Not detected", "type": "Not detected"}
 
         # Analyze with LLM
         return await self._analyze_with_llm(file_contents)
@@ -143,10 +143,10 @@ class SubjectDetector:
         """
         logger.info(f"Analyzing {len(file_contents)} files with LLM")
 
-        # Build file contents for prompt
+        # Build file contents for prompt - support both Hebrew and English
         file_contents_text = ""
         for i, file_info in enumerate(file_contents, 1):
-            file_contents_text += f"\n--- קובץ {i}: {file_info['path']} ---\n"
+            file_contents_text += f"\n--- File {i}: {file_info['path']} ---\n"
             file_contents_text += file_info['content']
             file_contents_text += "\n" + "=" * 50 + "\n"
 
@@ -179,11 +179,12 @@ class SubjectDetector:
 
         except Exception as e:
             logger.error(f"Error in LLM analysis: {e}")
-            return {"name": "לא זוהה", "type": "לא זוהה"}
+            return {"name": "Not detected", "type": "Not detected"}
 
     def _parse_llm_response(self, response: str) -> Dict[str, str]:
         """
         Parse LLM response to extract subject name and type from JSON
+        Supports both Hebrew and English field names and values
 
         Args:
             response: LLM response text (should be JSON)
@@ -197,28 +198,48 @@ class SubjectDetector:
             # Try to parse as JSON
             json_data = json.loads(response)
 
-            if "שם מקצוע" in json_data:
-                result["name"] = json_data["שם מקצוע"]
+            # Check for course name in both Hebrew and English field names
+            course_name = None
+            if "course_name" in json_data:
+                course_name = json_data["course_name"]
+            elif "שם מקצוע" in json_data:
+                course_name = json_data["שם מקצוע"]
 
-            if "סוג מקצוע" in json_data:
-                type_val = json_data["סוג מקצוע"]
-                if type_val in ['מתמטי', 'הומני']:
-                    result["type"] = type_val
+            if course_name:
+                result["name"] = course_name
+
+            # Check for course type in both Hebrew and English field names
+            course_type = None
+            if "course_type" in json_data:
+                course_type = json_data["course_type"]
+            elif "סוג מקצוע" in json_data:
+                course_type = json_data["סוג מקצוע"]
+
+            if course_type:
+                # Support both Hebrew and English type values
+                if course_type in ['מתמטי', 'Mathematics', 'Mathematical']:
+                    result["type"] = 'מתמטי'
+                elif course_type in ['הומני', 'Humanities', 'Humanistic']:
+                    result["type"] = 'הומני'
 
         except json.JSONDecodeError:
             logger.warning(f"Failed to parse JSON response: {response}")
-            # Fallback to text parsing
+            # Fallback to text parsing - support both Hebrew and English
             lines = response.split('\n')
             for line in lines:
                 line = line.strip()
-                if 'שם מקצוע' in line and ':' in line:
-                    name = line.split(':', 1)[1].strip().strip('"')
+                # Check for course name in both languages
+                if ('שם מקצוע' in line or 'course_name' in line) and ':' in line:
+                    name = line.split(':', 1)[1].strip().strip('"').strip("'")
                     if name:
                         result["name"] = name
-                elif 'סוג מקצוע' in line and ':' in line:
-                    type_val = line.split(':', 1)[1].strip().strip('"')
-                    if type_val in ['מתמטי', 'הומני']:
-                        result["type"] = type_val
+                # Check for course type in both languages
+                elif ('סוג מקצוע' in line or 'course_type' in line) and ':' in line:
+                    type_val = line.split(':', 1)[1].strip().strip('"').strip("'")
+                    if type_val in ['מתמטי', 'Mathematics', 'Mathematical']:
+                        result["type"] = 'מתמטי'
+                    elif type_val in ['הומני', 'Humanities', 'Humanistic']:
+                        result["type"] = 'הומני'
 
         logger.info(f"Parsed result: {result}")
         return result
