@@ -19,8 +19,10 @@ Special requirements for mathematical fields:
 - Use **precise definitions** and **consistent notation and symbols** throughout.  
 - Present **theorems, lemmas, corollaries, and principles**; provide **proofs or proof sketches**, and state assumptions/conditions clearly.  
 - When relevant, include **algorithms in readable pseudocode** (and mention complexity or invariants if appropriate).  
-- Use **LaTeX** for all formulas and mathematical expressions.  
 - Incorporate **step-by-step solved examples**, highlight **common mistakes**, and explain **key insights**.
+- Write all mathematical expressions in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`  
 
 Output requirements:
 - **Begin** with a concise introduction describing the Section’s goals and scope.  
@@ -64,9 +66,11 @@ Special requirements for mathematical fields:
 - Use **precise definitions** and **consistent notation and symbols** throughout.  
 - Present **theorems, lemmas, corollaries, and principles**; provide **proofs or proof sketches**, and state assumptions/conditions clearly.  
 - When relevant, include **algorithms in readable pseudocode** (with complexity or invariants if appropriate).  
-- Use **LaTeX** for all formulas and mathematical expressions.  
 - Incorporate **step-by-step solved examples**, highlight **common mistakes**, and explain **key insights**.
-
+- Write all mathematical expressions in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`  
+  
 Output requirements:
 - **Begin** with a concise introduction describing the Section’s goals and scope, and briefly note any connections to the previous Section when relevant.  
 - **Then produce long-form, continuous lecture notes** that integrate all current Section materials in a logical order, with headings/subheadings as needed; include explanations, definitions, theorems, proofs, examples, and lecturer’s notes where relevant.  
@@ -199,9 +203,11 @@ Special requirements for mathematical fields:
 - Use **precise definitions** and **consistent notation and symbols** throughout.  
 - Present **theorems, lemmas, corollaries, and principles**; provide **proofs or proof sketches**, and state assumptions/conditions clearly.  
 - When relevant, include **algorithms in readable pseudocode** (and mention complexity or invariants if appropriate).  
-- Use **LaTeX** for all formulas and mathematical expressions.  
 - Incorporate **step-by-step solved examples**, highlight **common mistakes**, and explain **key insights**.
-
+- Write all mathematical expressions in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`  
+  
 Output requirements:
 - **Begin** with a concise introduction describing the Section’s goals and scope.  
 - **Then produce long-form, continuous lecture notes** that integrate all materials in a logical order, with headings/subheadings as needed; include explanations, definitions, theorems, proofs, examples, and lecturer’s notes where relevant.  
@@ -247,8 +253,10 @@ Special requirements for mathematical fields:
 - Use **precise definitions** and **consistent notation and symbols** throughout.  
 - Present **theorems, lemmas, corollaries, and principles**; provide **proofs or proof sketches**, and state assumptions/conditions clearly.  
 - When relevant, include **algorithms in readable pseudocode** (and mention complexity or invariants if appropriate).  
-- Use **LaTeX** for all formulas and mathematical expressions.  
 - Incorporate **step-by-step solved examples**, highlight **common mistakes**, and explain **key insights**.
+- Write all mathematical expressions in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`  
 
 Output requirements:
 - **Begin** with a concise introduction describing the Section’s goals and scope, and briefly note any connections to the previous Section when relevant.  
@@ -381,10 +389,12 @@ Your task:
 
 Core requirements:
 - Include **definitions, explanations, examples, and important notes** from the files.  
-- If mathematical expressions appear, always present them using **LaTeX** for clarity.  
 - Identify links and continuity across different files, and organize the material in a **logical order** (from basic to advanced, or following the course progression).  
 - Provide **step-by-step explanations** where appropriate, highlight **common mistakes**, and explain **key insights**.
-
+- When mathematical expressions or equations are needed, write in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`
+  
 Output requirements:
 - **Begin** with a concise introduction describing the Section’s goals and scope.  
 - **Then produce long-form, continuous lecture notes** that integrate all materials in a logical order, with headings/subheadings as needed; include definitions, explanations, examples, and lecturer’s notes where relevant.  
@@ -429,10 +439,12 @@ Your task:
 
 Core requirements:
 - Include **definitions, explanations, examples, arguments, and important notes** from the files.  
-- If mathematical expressions appear, always present them using **LaTeX** for clarity.  
 - Identify links and continuity across different files, and organize the material in a **logical order** (from basic to advanced, or following the course progression).  
 - Provide **step-by-step explanations** where appropriate, highlight **common mistakes**, and explain **key insights**.
-
+- When mathematical expressions or equations are needed, write in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`
+  
 Output requirements:
 - **Begin** with a concise introduction describing the Section’s goals and scope, and briefly note any connections to the previous Section when relevant.  
 - **Then produce long-form, continuous lecture notes** that integrate all current Section materials in a logical order, with headings/subheadings as needed; include definitions, explanations, examples, and lecturer’s notes where relevant.  

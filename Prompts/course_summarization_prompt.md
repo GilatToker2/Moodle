@@ -12,7 +12,9 @@ Do not shorten or summarize — instead, merge all content into a single coheren
 Unify terminology, resolve overlaps or inconsistencies, and keep the text clear, flowing, and pedagogical.
 
 **For mathematical fields:**  
-- Use precise definitions, consistent notation, and LaTeX for all formulas.  
+- Write all mathematical expressions in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`  
 - Present theorems, proofs (or sketches), algorithms in pseudocode when relevant.  
 - Include step-by-step examples, common mistakes, and key insights.
 
@@ -78,7 +80,9 @@ Do not shorten or summarize — instead, merge all content into a single coheren
 Unify terminology, resolve overlaps or inconsistencies, and keep the text clear, flowing, and pedagogical.
 
 **For mathematical fields:**  
-- Use precise definitions, consistent notation, and LaTeX for all formulas.  
+- Write all mathematical expressions in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`  
 - Present theorems, proofs (or sketches), and algorithms in pseudocode when relevant.  
 - Include step-by-step examples, common mistakes, and key insights.
 
@@ -148,7 +152,9 @@ Unify terminology, resolve overlaps or inconsistencies, and keep the text clear,
 
 **Requirements:**  
 - Actively include **definitions, explanations, examples, and notes** — these are central to understanding, not optional extras.  
-- If mathematical expressions appear, always use **LaTeX** for clarity.  
+- When mathematical expressions or equations are needed, write in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`
 - Preserve all essential academic content, while removing duplicates or irrelevant material.  
 - Highlight the logical progression of the course: from foundations to advanced topics, and the connections between them.  
 - Emphasize recurring ideas, generalizations, and cumulative insights across Sections.  

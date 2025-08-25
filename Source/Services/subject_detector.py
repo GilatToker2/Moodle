@@ -192,7 +192,7 @@ class SubjectDetector:
         Returns:
             Dictionary with 'name' and 'type' keys
         """
-        result = {"name": "לא זוהה", "type": "לא זוהה"}
+        result = {"name": "Not detected", "type": "Not detected"}
 
         try:
             # Try to parse as JSON

@@ -18,8 +18,10 @@ Special requirements for mathematical fields:
 - Use precise definitions, consistent notation and symbols.  
 - Present theorems, proofs (or proof sketches), and key concepts.  
 - Include step-by-step solved examples, common mistakes, and key insights.  
-- Use LaTeX for all formulas and mathematical expressions.  
-
+- Write all mathematical expressions in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`
+  
 Important style rules:  
 - Write in a clear, teacher-like, explanatory tone.  
 - Follow the logical flow of the lecture, but improve clarity and structure.  
@@ -51,8 +53,10 @@ Special requirements for mathematical fields:
 - Use precise definitions, consistent notation and symbols.  
 - Present theorems, proofs (or proof sketches), and key concepts.  
 - Include step-by-step solved examples, common mistakes, and key insights.  
-- Use LaTeX for all formulas and mathematical expressions.  
-
+- Write all mathematical expressions in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`
+    
 Important style rules:  
 - Write in a clear, teacher-like, explanatory tone.  
 - Follow the logical order of the original file, but improve clarity and flow.  
@@ -149,8 +153,10 @@ Special requirements for mathematical fields:
 - Present theorems, proofs (or proof sketches), and key concepts.  
 - Include step-by-step solved examples, common mistakes, and key insights.  
 - When relevant, include algorithms written in readable pseudocode.  
-- Always use LaTeX for formulas and mathematical expressions.  
-
+- Write all mathematical expressions in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`
+  
 Important style rules:  
 - Write in a clear, teacher-like, explanatory tone.  
 - Follow the logical flow of the lecture, but improve clarity and structure.  
@@ -183,8 +189,10 @@ Special requirements for mathematical fields:
 - Present theorems, proofs (or proof sketches), and key concepts.  
 - Include step-by-step solved examples, common mistakes, and key insights.  
 - When relevant, include algorithms written in readable pseudocode.  
-- Always use LaTeX for formulas and mathematical expressions.  
-
+- Write all mathematical expressions in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`
+  
 Important style rules:  
 - Write in a clear, teacher-like, explanatory tone.  
 - Follow the logical order of the file, but improve clarity and structure.  
@@ -283,7 +291,10 @@ Core requirements:
 - Provide intuitive explanations and relevant examples.  
 - Integrate lecturer’s insights and contextual notes when relevant.  
 - Write in accessible, teacher-like Hebrew.  
-- When mathematical expressions or equations are needed, always use LaTeX for clarity.  
+- When mathematical expressions or equations are needed, write in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`
+  
 
 Important style rules:  
 - Write in a clear, explanatory, pedagogical tone.  
@@ -316,8 +327,10 @@ Core requirements:
 - Provide intuitive explanations and relevant examples.  
 - Integrate lecturer’s insights, arguments, and contextual notes when relevant.  
 - Write in accessible, teacher-like Hebrew.  
-- When mathematical expressions or equations are needed, always use LaTeX for clarity.  
-
+- When mathematical expressions or equations are needed, write in **LaTeX syntax** with proper Markdown math delimiters:  
+  - Inline math: `$ ... $`  
+  - Display/Block math: `$$ ... $$`
+  
 Important style rules:  
 - Write in a clear, explanatory, pedagogical tone.  
 - Follow the logical flow of the original file, but improve clarity and coherence.  
