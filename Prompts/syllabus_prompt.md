@@ -17,7 +17,9 @@ Guidelines for writing:
   * Main theoretical concepts, methods, or applications covered  
 - Show how the topics connect to form a coherent learning progression
 - Include standard syllabus components
-- When mathematical notation, formulas, or symbols are needed, present them using LaTeX format
+- When mathematical notation, formulas, or symbols are needed, **always write them in LaTeX syntax using Markdown math delimiters**:
+  * Inline math: `$ ... $`  
+  * Display/Block math: `$$ ... $$`  
 
 Course summary:
 ```
@@ -71,8 +73,10 @@ Guidelines for writing:
   * Main theoretical concepts, methods, or applications covered  
 - Show how the topics connect to form a coherent learning progression
 - Include standard syllabus components
-- When mathematical notation, formulas, or symbols are needed, present them using LaTeX format
-
+- When mathematical notation, formulas, or symbols are needed, **always write them in LaTeX syntax using Markdown math delimiters**:
+  * Inline math: `$ ... $`  
+  * Display/Block math: `$$ ... $$`  
+  
 Course summary:
 ```
 
@@ -126,8 +130,10 @@ Guidelines for writing:
   * Key readings or references (if available in the course summary)  
 - Show how the topics connect to form a coherent learning progression
 - Include standard syllabus components 
-- When mathematical notation, formulas, or symbols are needed, present them using LaTeX format
-
+- When mathematical notation, formulas, or symbols are needed, **always write them in LaTeX syntax using Markdown math delimiters**:
+  * Inline math: `$ ... $`  
+  * Display/Block math: `$$ ... $$`  
+  
 Course summary:
 
 ```
