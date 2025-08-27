@@ -529,7 +529,7 @@ class ContentSummarizer:
                 await asyncio.sleep(2)
 
         # Final summary
-        logger.info(f"Batch summarization completed!")
+        logger.info(f"Batch summarization completed!\n")
         logger.info(f"   Files processed: {total_processed}")
         logger.info(f"   Successful: {total_successful}")
         logger.info(f"   Failed: {total_failed}")

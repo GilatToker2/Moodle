@@ -549,7 +549,7 @@ class VideoIndexerManager:
         # Check file extension
         file_ext = os.path.splitext(video_url)[1].lower()
         if file_ext not in self.supported_formats:
-            logger.info(f"Unsupported video format: {video_url}")
+            logger.error(f"Unsupported video format: {video_url}")
             return None
 
         # Create SAS URL for video from raw-data container

@@ -157,7 +157,7 @@ async def document_to_markdown(course_id: str, section_id: str, file_id: int, do
         # Create path according to structure: CourseID/SectionID/Docs_md/FileID.md
         target_blob_path = f"{course_id}/{section_id}/Docs_md/{file_id}.md"
 
-        logger.info(f"Uploading markdown to processeddata container: {target_blob_path}")
+        logger.info(f"Uploading markdown to processed data container: {target_blob_path}")
 
         success = await blob_manager_processed.upload_text_to_blob(
             text_content=enhanced_md_content,
@@ -165,10 +165,10 @@ async def document_to_markdown(course_id: str, section_id: str, file_id: int, do
         )
 
         if success:
-            logger.info(f"File uploaded successfully to processeddata container: {target_blob_path}")
+            logger.info(f"File uploaded successfully to processed data container: {target_blob_path}")
             return target_blob_path
         else:
-            logger.info(f"Failed to upload file to processeddata container")
+            logger.info(f"Failed to upload file to processed data container")
             return None
 
     else:

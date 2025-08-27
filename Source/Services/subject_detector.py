@@ -4,7 +4,7 @@ Identifies subject name and type based on course files using LLM
 """
 
 import os
-from typing import List, Optional, Dict
+from typing import List, Dict
 from openai import AsyncAzureOpenAI
 from Source.Services.blob_manager import BlobManager
 import json
@@ -24,7 +24,6 @@ logger = setup_logging()
 subject_max_doc_files = 10
 subject_max_video_files = 5
 subject_per_file_chars = 30000
-
 
 
 class SubjectDetector:
@@ -52,7 +51,6 @@ class SubjectDetector:
                 api_version=AZURE_OPENAI_API_VERSION,
                 azure_endpoint=AZURE_OPENAI_ENDPOINT
             )
-
 
         # Use provided prompt_loader or get shared instance
         self.prompt_loader = prompt_loader

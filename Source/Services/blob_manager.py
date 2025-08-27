@@ -7,7 +7,7 @@ Supports all file types: MP4, MD, PDF, JSON etc.
 import os
 from typing import Optional, List
 from datetime import datetime, timedelta
-from azure.storage.blob import BlobServiceClient, ContentSettings, generate_blob_sas, BlobSasPermissions
+from azure.storage.blob import ContentSettings, generate_blob_sas, BlobSasPermissions
 from azure.storage.blob.aio import BlobServiceClient as AsyncBlobServiceClient
 from Config.config import STORAGE_CONNECTION_STRING, CONTAINER_NAME
 import traceback
