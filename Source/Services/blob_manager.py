@@ -7,7 +7,7 @@ Supports all file types: MP4, MD, PDF, JSON etc.
 import os
 from typing import Optional, List
 from datetime import datetime, timedelta
-from azure.storage.blob import ContentSettings, generate_blob_sas, BlobSasPermissions
+from azure.storage.blob import BlobServiceClient, ContentSettings, generate_blob_sas, BlobSasPermissions
 from azure.storage.blob.aio import BlobServiceClient as AsyncBlobServiceClient
 from Config.config import STORAGE_CONNECTION_STRING, CONTAINER_NAME
 import traceback
@@ -50,7 +50,6 @@ class BlobManager:
             '.rar': 'application/x-rar-compressed',
             '.7z': 'application/x-7z-compressed'
         }
-
     async def close(self):
         """Close the async client connection"""
         if hasattr(self, '_async_client') and self._async_client:
@@ -89,7 +88,7 @@ class BlobManager:
             return True
 
         except Exception as e:
-            logger.info(f"Error downloading file {blob_name}: {e}")
+            logger.error(f"Failed to download file {blob_name} to {local_file_path}: {e}")
             return False
 
     async def list_files(self, folder: Optional[str] = None) -> List[str]:
@@ -114,7 +113,7 @@ class BlobManager:
             return blob_list
 
         except Exception as e:
-            logger.info(f"Error listing files: {e}")
+            logger.error(f"Failed to list files in folder '{folder}': {e}")
             return []
 
     # def download_folder_files(self, blob_folder_path: str, local_temp_dir: str) -> List[str]:
@@ -195,7 +194,7 @@ class BlobManager:
             return blob_url
 
         except Exception as e:
-            logger.info(f"Error generating SAS URL for {blob_name}: {e}")
+            logger.error(f"Failed to generate SAS URL for {blob_name}: {e}")
             return ""
 
     async def download_to_memory(self, blob_name: str) -> Optional[bytes]:
@@ -221,7 +220,7 @@ class BlobManager:
             return file_bytes
 
         except Exception as e:
-            logger.info(f"Error downloading file to memory {blob_name}: {e}")
+            logger.error(f"Failed to download file to memory {blob_name}: {e}")
             return None
 
     async def upload_text_to_blob(self, text_content: str, blob_name: str, container: str = None) -> bool:
@@ -259,7 +258,7 @@ class BlobManager:
             return True
 
         except Exception as e:
-            logger.info(f"Error uploading text to blob: {e}")
+            logger.error(f"Failed to upload text to blob: {e}")
             return False
 
 async def main():
@@ -302,7 +301,7 @@ async def main():
         logger.info("\nBlob manager test completed!")
 
     except Exception as e:
-        logger.info(f"Failed to test blob manager: {e}")
+        logger.error(f"Failed to test blob manager: {e}")
         traceback.print_exc()
 
 if __name__ == "__main__":
