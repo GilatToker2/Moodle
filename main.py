@@ -329,6 +329,14 @@ class ProcessVideoRequest(BaseModel):
     video_url: str
 
 
+class ProcessVideoFromIdRequest(BaseModel):
+    course_id: str
+    section_id: str
+    file_id: int
+    video_name: str
+    video_id: str
+
+
 class IndexRequest(BaseModel):
     blob_paths: List[str]
     create_new_index: bool = False
@@ -408,6 +416,7 @@ async def root():
         "functions": [
             "/process/document - Convert documents to Markdown",
             "/process/video - Process videos with transcription",
+            "/process/video_from_id - Process videos from existing Video Indexer ID",
             "/insert_to_index - Insert files to search index",
             "/delete_from_index - Delete content from search index",
             "/summarize/md - Create summary from Markdown",
@@ -602,6 +611,97 @@ async def process_video_file(request: ProcessVideoRequest):
     except Exception as e:
         logger.error(f"Error in video processing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
+
+
+@app.post(
+    "/process/video_from_id",
+    response_model=ProcessVideoResponse,
+    responses={
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "Video processing failed"}
+    },
+    tags=["Video Processing"]
+)
+async def process_video_from_id(request: ProcessVideoFromIdRequest):
+    """
+    Process Video from Existing Video ID in Azure Video Indexer
+
+    **Function Description:**
+    Processes an existing video in Azure Video Indexer using its video_id to create Markdown format transcription and analysis.
+
+    **What to Expect:**
+    • Uses existing video_id from Video Indexer (no upload needed)
+    • Waits for video processing completion if still in progress
+    • Automatic Hebrew transcription with timestamps
+    • AI-powered extraction of keywords and topics
+    • Subject type classification ("Humanities" or "Mathematics")
+    • Full transcript with precise timestamps
+    • Saves markdown to blob storage with structure: CourseID/SectionID/Videos_md/FileID.md
+    • Video name is included in the transcription
+
+    **Request Body Example:**
+    ```json
+    {
+        "course_id": "CS101",
+        "section_id": "Section1",
+        "file_id": 2,
+        "video_name": "First Lesson - Trimmed",
+        "video_id": "n7qnox2f7w"
+    }
+    ```
+
+    **Returns:**
+    - success: Boolean indicating if the operation was successful
+    - blob_path: Path to the created markdown file in blob storage (or None if failed)
+    """
+    try:
+        logger.info(f"Starting video processing from video_id: {request.video_name}")
+        logger.info(f"CourseID: {request.course_id}, SectionID: {request.section_id}, FileID: {request.file_id}")
+        logger.debug(f"VideoID: {request.video_id}")
+
+        # Validate input parameters
+        if not request.course_id or not request.section_id:
+            raise HTTPException(status_code=422, detail="course_id and section_id are required")
+
+        if not request.video_name or not request.video_id:
+            raise HTTPException(status_code=422, detail="video_name and video_id are required")
+
+        if request.file_id is None or request.file_id < 0:
+            raise HTTPException(status_code=422, detail="file_id must be a non-negative integer")
+
+        # Get shared BlobManager instance for processed data
+        blob_manager_processed = get_blob_manager()
+
+        # Process video using existing video_id
+        video_processor = get_video_processor()
+        result_blob_path = await video_processor.process_video_to_md_from_id(
+            video_id=request.video_id,
+            course_id=request.course_id,
+            section_id=request.section_id,
+            file_id=request.file_id,
+            video_name=request.video_name,
+            blob_manager_processed=blob_manager_processed
+        )
+
+        if result_blob_path:
+            logger.info(f"Video processing from ID completed successfully: {result_blob_path}")
+            return ProcessVideoResponse(
+                success=True,
+                blob_path=result_blob_path
+            )
+        else:
+            logger.error("Video processing from ID failed")
+            return ProcessVideoResponse(
+                success=False,
+                blob_path=None
+            )
+
+    except HTTPException:
+        # Re-raise HTTP exceptions (like validation errors)
+        raise
+    except Exception as e:
+        logger.error(f"Error in video processing from ID: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Video processing from ID failed: {str(e)}")
 
 
 # ================================

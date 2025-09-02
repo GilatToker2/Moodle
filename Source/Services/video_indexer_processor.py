@@ -64,7 +64,6 @@ class VideoIndexerManager:
             logger.info(f"Error initializing VideoIndexer client: {e}")
             self._vi_client = None
 
-
     async def close(self):
         """Close VideoIndexer connections and clean up resources"""
         logger.info("VideoIndexerManager cleanup completed")
@@ -521,6 +520,110 @@ class VideoIndexerManager:
 
         return "\n".join(md_content)
 
+    async def process_video_to_md_from_id(self, video_id: str, course_id: str = None, section_id: str = None,
+                                          file_id: int = None, video_name: str = None,
+                                          blob_manager_processed=None) -> str | None:
+        """
+        Process video using existing video_id to create markdown file
+        Uses the current template format from the original implementation
+
+        Args:
+            video_id: Video ID in Video Indexer (already uploaded and processed)
+            course_id: Course identifier (optional, will use video_id if not provided)
+            section_id: Section identifier (optional, will use 'default' if not provided)
+            file_id: File identifier (optional, will use video_id if not provided)
+            video_name: Video name (optional, will fetch from Video Indexer if not provided)
+            blob_manager_processed: Shared BlobManager for processeddata container
+
+        Returns:
+            File path in blob storage where final result was saved, or None if failed
+        """
+        logger.info(f"Processing video from video_id: {video_id}")
+
+        try:
+            # Fetch video data using video_id
+            logger.info(f"Fetching video data for video_id: {video_id}")
+
+            url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Index"
+            params = await self._get_params_with_token()
+
+            async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+                resp = await client.get(url, params=params)
+
+                if resp.status_code == 404:
+                    logger.error(f"Video with ID '{video_id}' not found")
+                    return None
+
+                resp.raise_for_status()
+                index_data = resp.json()
+
+            state = index_data.get("state", "Unknown")
+            logger.info(f"Video state: {state}")
+
+            # If video is not processed yet, wait for completion
+            if state != "Processed":
+                logger.info(f"Video is not fully processed yet (state: {state}). Waiting for completion...")
+                index_data = await self.wait_for_indexing(video_id)
+                logger.info("Video processing completed! Proceeding with markdown generation...")
+
+            # Extract transcript with timestamps
+            transcript_segments = self.extract_transcript_with_timestamps(index_data)
+
+            # Merge segments with default 4 minutes (240 seconds)
+            merge_segments_duration = 240  # 4 minutes default
+            logger.info(f"Merging segments to maximum {merge_segments_duration} seconds...")
+            transcript_segments = self.merge_segments_by_duration(transcript_segments, merge_segments_duration)
+
+            # Extract metadata
+            metadata = self.extract_video_metadata(index_data)
+
+            # Use provided video_name or get from metadata
+            if video_name is None:
+                video_name = metadata.get('name', f'Video_{video_id}')
+
+            # Create structured data with video name (using current template format)
+            structured_data = {
+                "id": str(file_id),  # Use file_id as identifier
+                "video_name": video_name,  # Use provided or fetched name
+                **metadata,
+                "transcript_segments": transcript_segments,
+                "full_transcript": " ".join([seg["text"] for seg in transcript_segments]),
+                "segment_start_times": [seg["start_time"] for seg in transcript_segments],
+                "segment_start_seconds": [seg["start_seconds"] for seg in transcript_segments]
+            }
+
+            # Convert to markdown using current template
+            md_content = self.parse_insights_to_md(structured_data)
+
+            logger.info(f"Processing completed successfully!")
+            logger.info(f"Found {len(transcript_segments)} transcript segments")
+
+            # Create target path and upload final result
+            target_blob_path = f"{course_id}/{section_id}/Videos_md/{file_id}.md"
+
+            logger.info(f"Uploading final result to processeddata container: {target_blob_path}")
+            success = await blob_manager_processed.upload_text_to_blob(
+                text_content=md_content,
+                blob_name=target_blob_path
+            )
+
+            if success:
+                logger.info(f"Final file uploaded successfully to processeddata container: {target_blob_path}")
+                return target_blob_path
+            else:
+                logger.error(f"Failed to upload final file to processeddata container")
+                return None
+
+        except httpx.RequestError as e:
+            if "404" in str(e):
+                logger.error(f"Video with ID '{video_id}' not found. Please check the video ID.")
+            else:
+                logger.error(f"Error fetching video data: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Error processing video {video_id}: {str(e)}")
+            return None
+
     async def process_video_to_md(self, course_id: str, section_id: str, file_id: int, video_name: str,
                                   video_url: str, blob_manager_raw=None, blob_manager_processed=None) -> str | None:
         """
@@ -668,31 +771,67 @@ class VideoIndexerManager:
 
 
 async def main():
-    # Process video from blob storage with new parameters
-    course_id = "CS101"
-    section_id = "Section1"
-    file_id = 2
-    video_name = "L1 - A "
-    video_url = "L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4"
-
-    logger.info(f"Processing video: {video_name}")
-    logger.info(f"CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
-    logger.info(f"VideoURL: {video_url}")
-
+    # # Example 1: Process video from blob storage (original functionality)
+    # course_id = "CS101"
+    # section_id = "Section1"
+    # file_id = 2
+    # video_name = "L1 - A "
+    # video_url = "L1_091004f349688522f773afc884451c9af6da18fb_Trim.mp4"
+    #
+    # logger.info(f"Processing video from URL: {video_name}")
+    # logger.info(f"CourseID: {course_id}, SectionID: {section_id}, FileID: {file_id}")
+    # logger.info(f"VideoURL: {video_url}")
+    #
     try:
         manager = VideoIndexerManager()
-        result = await manager.process_video_to_md(course_id, section_id, file_id, video_name, video_url,
-                                                   merge_segments_duration=20)
 
-        if result:
-            logger.info(f"\n Video processing started successfully: {result}")
-            logger.info(f"Final file will be saved to: {course_id}/{section_id}/Videos_md/{file_id}.md")
-            logger.info(f"Processing continues in background...")
-        else:
-            logger.info(f"\n Video processing failed: {video_name}")
-
+    #     # Original method - process from URL
+    #     result = await manager.process_video_to_md(course_id, section_id, file_id, video_name, video_url)
+    #
+    #     if result:
+    #         logger.info(f"\n Video processing started successfully: {result}")
+    #         logger.info(f"Final file will be saved to: {course_id}/{section_id}/Videos_md/{file_id}.md")
+    #         logger.info(f"Processing continues in background...")
+    #     else:
+    #         logger.info(f"\n Video processing failed: {video_name}")
+    #
     except Exception as e:
         logger.info(f"Error processing video: {e}")
+
+    # Example 2: Process video from existing video_id (new functionality)
+    logger.info("\n" + "=" * 50)
+    logger.info("Testing new process_video_to_md_from_id function")
+    logger.info("=" * 50)
+
+    # Example parameters for video_id processing
+    existing_video_id = "apktgbi00s"  # Replace with actual video_id
+    course_id_2 = "CS102"
+    section_id_2 = "Section2"
+    file_id_2 = 3
+    video_name_2 = "Existing Video Test"
+
+    try:
+        # Create blob manager for processed data
+        blob_manager_processed = BlobManager(container_name="processeddata")
+
+        # New method - process from existing video_id
+        result_2 = await manager.process_video_to_md_from_id(
+            video_id=existing_video_id,
+            course_id=course_id_2,
+            section_id=section_id_2,
+            file_id=file_id_2,
+            video_name=video_name_2,
+            blob_manager_processed=blob_manager_processed
+        )
+
+        if result_2:
+            logger.info(f"\n Video processing from ID completed successfully!")
+            logger.info(f"Final file saved to: {result_2}")
+        else:
+            logger.info(f"\n Video processing from ID failed")
+
+    except Exception as e:
+        logger.info(f"Error processing video from ID: {e}")
 
 
 if __name__ == "__main__":
