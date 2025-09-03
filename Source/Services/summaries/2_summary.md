@@ -1,1 +1,0 @@
-CS101/Section1/file_summaries/2.md

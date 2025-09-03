@@ -207,7 +207,7 @@ class ContentSummarizer:
         }
 
     async def summarize_content(self, content: str, content_type: str = "document", subject_name: str = None,
-                                subject_type: str = None, existing_summary: str = None) -> str:
+                                subject_type: str = None) -> str:
         """
         Create summary for content
 
@@ -215,8 +215,7 @@ class ContentSummarizer:
             content: Content to summarize (MD text)
             content_type: Content type - "video" or "document"
             subject_name: Subject name
-            subject_type: Subject type (for video only)
-            existing_summary: Existing summary (for video only)
+            subject_type: Subject type
 
         Returns:
             Generated summary
@@ -355,7 +354,6 @@ class ContentSummarizer:
                         content_type="video",
                         subject_name=subject_name,
                         subject_type=subject_type,
-                        existing_summary=parsed_data.get("existing_summary")
                     )
 
                 # If it's a regular document - standard handling
@@ -849,48 +847,48 @@ async def main():
     course_id = "Discrete_mathematics"
     section_id = "Section2"
 
-    # # ========================================
-    # # TEST 1: Individual File Summaries
-    # # ========================================
-    # logger.info("\n" + "=" * 70)
-    # logger.info("TEST 1: Testing Individual File Summaries (summarize_md_file)")
-    # logger.info("=" * 70)
-    #
-    # test_files = [
-    #     f"{course_id}/{section_id}/Videos_md/2.md"
-    #     # f"{course_id}/{section_id}/Docs_md/2002.md"
-    # ]
-    #
-    # successful_files = 0
-    # for i, blob_path in enumerate(test_files, 1):
-    #     logger.info(f"\n--- File Test {i}/{len(test_files)} ---")
-    #     logger.info(f"Testing file: {blob_path}")
-    #     logger.info(f"Subject: {subject_name} ({subject_type})")
-    #
-    #     try:
-    #         result = await summarizer.summarize_md_file(
-    #             blob_path=blob_path,
-    #             subject_name=subject_name,
-    #             subject_type=subject_type
-    #         )
-    #
-    #         if result:
-    #             logger.info(f"File summary created successfully!")
-    #             logger.info(f"Summary saved to: {result}")
-    #             successful_files += 1
-    #         else:
-    #             logger.info(f"Failed to create file summary")
-    #
-    #     except Exception as e:
-    #         logger.info(f" Error during file summarization: {str(e)}")
-    #         traceback.print_exc()
-    #
-    #     if i < len(test_files):
-    #         logger.info(" Waiting 3 seconds before next file...")
-    #         await asyncio.sleep(3)
-    #
-    # logger.info(f"\nFile Summary Results: {successful_files}/{len(test_files)} successful")
-    #
+    # ========================================
+    # TEST 1: Individual File Summaries
+    # ========================================
+    logger.info("\n" + "=" * 70)
+    logger.info("TEST 1: Testing Individual File Summaries (summarize_md_file)")
+    logger.info("=" * 70)
+
+    test_files = [
+        f"{course_id}/{section_id}/Videos_md/2.md"
+        # f"{course_id}/{section_id}/Docs_md/2002.md"
+    ]
+
+    successful_files = 0
+    for i, blob_path in enumerate(test_files, 1):
+        logger.info(f"\n--- File Test {i}/{len(test_files)} ---")
+        logger.info(f"Testing file: {blob_path}")
+        logger.info(f"Subject: {subject_name} ({subject_type})")
+
+        try:
+            result = await summarizer.summarize_md_file(
+                blob_path=blob_path,
+                subject_name=subject_name,
+                subject_type=subject_type
+            )
+
+            if result:
+                logger.info(f"File summary created successfully!")
+                logger.info(f"Summary saved to: {result}")
+                successful_files += 1
+            else:
+                logger.info(f"Failed to create file summary")
+
+        except Exception as e:
+            logger.info(f" Error during file summarization: {str(e)}")
+            traceback.print_exc()
+
+        if i < len(test_files):
+            logger.info(" Waiting 3 seconds before next file...")
+            await asyncio.sleep(3)
+
+    logger.info(f"\nFile Summary Results: {successful_files}/{len(test_files)} successful")
+
     # # ========================================
     # # TEST 2: Section Summary
     # # ========================================
@@ -927,56 +925,56 @@ async def main():
     # except Exception as e:
     #     logger.info(f"Error during section summarization: {str(e)}")
     #     traceback.print_exc()
-
-    # ========================================
-    # TEST 3: Course Summary
-    # ========================================
-    logger.info("\n" + "=" * 70)
-    logger.info("TEST 3: Testing Course Summary (summarize_course_from_blob)")
-    logger.info("=" * 70)
-
-    course_path = f"{course_id}/section_summaries"
-    logger.info(f"Testing course path: {course_path}")
-    logger.info(f"Subject: {subject_name} ({subject_type})")
-
-    try:
-        # logger.info(" Waiting 5 seconds before course summary...")
-        # await asyncio.sleep(30)
-
-        course_result = await summarizer.summarize_course_from_blob(
-            full_blob_path=course_path,
-            subject_name=subject_name,
-            subject_type=subject_type
-        )
-
-        if course_result:
-            logger.info(f"Course summary created successfully!")
-            logger.info(f"Course summary saved to: {course_result}")
-        else:
-            logger.info(f"Failed to create course summary")
-            logger.info(f"Make sure there are section summaries in: {course_path}")
-
-    except Exception as e:
-        logger.info(f" Error during course summarization: {str(e)}")
-        traceback.print_exc()
-
-    # ========================================
-    # FINAL SUMMARY
-    # ========================================
-    logger.info("\n" + "=" * 70)
-    logger.info("ESTING COMPLETED - SUMMARY")
-    logger.info("=" * 70)
-    logger.info(f"Course: {subject_name} ({subject_type})")
-    logger.info(f"Course ID: {course_id}")
-    logger.info(f"Section ID: {section_id}")
-    logger.info("")
-    logger.info("Tests Performed:")
-    # logger.info(f"   1. Individual File Summaries: {successful_files}/{len(test_files)} successful")
-    # logger.info(f"   2. Section Summary: {'Correct' if 'section_result' in locals() and section_result else 'Error'}")
-    logger.info(f"   3. Course Summary: {'Correct' if 'course_result' in locals() and course_result else 'Error'}")
-    logger.info("")
-    logger.info("Note: Section and Course summaries depend on previous summaries existing in blob storage")
-    logger.info("=" * 70)
+    #
+    # # ========================================
+    # # TEST 3: Course Summary
+    # # ========================================
+    # logger.info("\n" + "=" * 70)
+    # logger.info("TEST 3: Testing Course Summary (summarize_course_from_blob)")
+    # logger.info("=" * 70)
+    #
+    # course_path = f"{course_id}/section_summaries"
+    # logger.info(f"Testing course path: {course_path}")
+    # logger.info(f"Subject: {subject_name} ({subject_type})")
+    #
+    # try:
+    #     # logger.info(" Waiting 5 seconds before course summary...")
+    #     # await asyncio.sleep(30)
+    #
+    #     course_result = await summarizer.summarize_course_from_blob(
+    #         full_blob_path=course_path,
+    #         subject_name=subject_name,
+    #         subject_type=subject_type
+    #     )
+    #
+    #     if course_result:
+    #         logger.info(f"Course summary created successfully!")
+    #         logger.info(f"Course summary saved to: {course_result}")
+    #     else:
+    #         logger.info(f"Failed to create course summary")
+    #         logger.info(f"Make sure there are section summaries in: {course_path}")
+    #
+    # except Exception as e:
+    #     logger.info(f" Error during course summarization: {str(e)}")
+    #     traceback.print_exc()
+    #
+    # # ========================================
+    # # FINAL SUMMARY
+    # # ========================================
+    # logger.info("\n" + "=" * 70)
+    # logger.info("ESTING COMPLETED - SUMMARY")
+    # logger.info("=" * 70)
+    # logger.info(f"Course: {subject_name} ({subject_type})")
+    # logger.info(f"Course ID: {course_id}")
+    # logger.info(f"Section ID: {section_id}")
+    # logger.info("")
+    # logger.info("Tests Performed:")
+    # # logger.info(f"   1. Individual File Summaries: {successful_files}/{len(test_files)} successful")
+    # # logger.info(f"   2. Section Summary: {'Correct' if 'section_result' in locals() and section_result else 'Error'}")
+    # logger.info(f"   3. Course Summary: {'Correct' if 'course_result' in locals() and course_result else 'Error'}")
+    # logger.info("")
+    # logger.info("Note: Section and Course summaries depend on previous summaries existing in blob storage")
+    # logger.info("=" * 70)
 
 
 if __name__ == "__main__":
