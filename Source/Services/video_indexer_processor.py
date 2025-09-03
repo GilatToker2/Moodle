@@ -524,8 +524,8 @@ class VideoIndexerManager:
                                           file_id: int = None, video_name: str = None,
                                           blob_manager_processed=None) -> str | None:
         """
-        Process video using existing video_id to create markdown file
-        Uses the current template format from the original implementation
+        NON-BLOCKING: Process video using existing video_id to create markdown file
+        Returns target path immediately, processing continues in background
 
         Args:
             video_id: Video ID in Video Indexer (already uploaded and processed)
@@ -536,92 +536,36 @@ class VideoIndexerManager:
             blob_manager_processed: Shared BlobManager for processeddata container
 
         Returns:
-            File path in blob storage where final result was saved, or None if failed
+            File path in blob storage where final result will be saved, or None if failed
         """
-        logger.info(f"Processing video from video_id: {video_id}")
+        logger.info(f"Starting NON-BLOCKING video processing from video_id: {video_id}")
 
         try:
-            # Fetch video data using video_id
-            logger.info(f"Fetching video data for video_id: {video_id}")
-
-            url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Index"
-            params = await self._get_params_with_token()
-
-            async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
-                resp = await client.get(url, params=params)
-
-                if resp.status_code == 404:
-                    logger.error(f"Video with ID '{video_id}' not found")
-                    return None
-
-                resp.raise_for_status()
-                index_data = resp.json()
-
-            state = index_data.get("state", "Unknown")
-            logger.info(f"Video state: {state}")
-
-            # If video is not processed yet, wait for completion
-            if state != "Processed":
-                logger.info(f"Video is not fully processed yet (state: {state}). Waiting for completion...")
-                index_data = await self.wait_for_indexing(video_id)
-                logger.info("Video processing completed! Proceeding with markdown generation...")
-
-            # Extract transcript with timestamps
-            transcript_segments = self.extract_transcript_with_timestamps(index_data)
-
-            # Merge segments with default 4 minutes (240 seconds)
-            merge_segments_duration = 240  # 4 minutes default
-            logger.info(f"Merging segments to maximum {merge_segments_duration} seconds...")
-            transcript_segments = self.merge_segments_by_duration(transcript_segments, merge_segments_duration)
-
-            # Extract metadata
-            metadata = self.extract_video_metadata(index_data)
-
-            # Use provided video_name or get from metadata
-            if video_name is None:
-                video_name = metadata.get('name', f'Video_{video_id}')
-
-            # Create structured data with video name (using current template format)
-            structured_data = {
-                "id": str(file_id),  # Use file_id as identifier
-                "video_name": video_name,  # Use provided or fetched name
-                **metadata,
-                "transcript_segments": transcript_segments,
-                "full_transcript": " ".join([seg["text"] for seg in transcript_segments]),
-                "segment_start_times": [seg["start_time"] for seg in transcript_segments],
-                "segment_start_seconds": [seg["start_seconds"] for seg in transcript_segments]
-            }
-
-            # Convert to markdown using current template
-            md_content = self.parse_insights_to_md(structured_data)
-
-            logger.info(f"Processing completed successfully!")
-            logger.info(f"Found {len(transcript_segments)} transcript segments")
-
-            # Create target path and upload final result
+            # Create target path immediately
             target_blob_path = f"{course_id}/{section_id}/Videos_md/{file_id}.md"
 
-            logger.info(f"Uploading final result to processeddata container: {target_blob_path}")
-            success = await blob_manager_processed.upload_text_to_blob(
-                text_content=md_content,
-                blob_name=target_blob_path
+            logger.info(f"Video processing from ID started successfully!")
+            logger.info(f"Starting background processing for: {video_name}")
+            logger.info(f"Final result will be saved to: {target_blob_path}")
+
+            # Start background processing as async task
+            asyncio.create_task(
+                self._background_process_video(
+                    video_id,
+                    course_id,
+                    section_id,
+                    file_id,
+                    video_name,
+                    blob_manager_processed,
+                    from_existing_id=True
+                )
             )
 
-            if success:
-                logger.info(f"Final file uploaded successfully to processeddata container: {target_blob_path}")
-                return target_blob_path
-            else:
-                logger.error(f"Failed to upload final file to processeddata container")
-                return None
+            # Return target path immediately - processing continues in background
+            return target_blob_path
 
-        except httpx.RequestError as e:
-            if "404" in str(e):
-                logger.error(f"Video with ID '{video_id}' not found. Please check the video ID.")
-            else:
-                logger.error(f"Error fetching video data: {str(e)}")
-            return None
         except Exception as e:
-            logger.error(f"Error processing video {video_id}: {str(e)}")
+            logger.error(f"Video processing from ID failed to start: {str(e)}")
             return None
 
     async def process_video_to_md(self, course_id: str, section_id: str, file_id: int, video_name: str,
@@ -686,7 +630,8 @@ class VideoIndexerManager:
                     section_id,
                     file_id,
                     video_name,
-                    blob_manager_processed
+                    blob_manager_processed,
+                    from_existing_id=False
                 )
             )
 
@@ -698,13 +643,40 @@ class VideoIndexerManager:
             return None
 
     async def _background_process_video(self, video_id: str, course_id: str, section_id: str, file_id: int,
-                                        video_name: str, blob_manager_processed=None):
+                                        video_name: str, blob_manager_processed=None, from_existing_id: bool = False):
         """Background processing of video after upload - runs as async task"""
         try:
-            logger.info(f"Background processing started for video: {video_name} (ID: {video_id})")
+            if from_existing_id:
+                logger.info(f"Background processing started for video from existing ID: {video_name} (ID: {video_id})")
 
-            # Wait for indexing to complete
-            index_data = await self.wait_for_indexing(video_id)
+                # Fetch video data using video_id first
+                logger.info(f"Fetching video data for video_id: {video_id}")
+                url = f"https://api.videoindexer.ai/{self.location}/Accounts/{self.account_id}/Videos/{video_id}/Index"
+                params = await self._get_params_with_token()
+
+                async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+                    resp = await client.get(url, params=params)
+
+                    if resp.status_code == 404:
+                        logger.error(f"Video with ID '{video_id}' not found")
+                        return
+
+                    resp.raise_for_status()
+                    index_data = resp.json()
+
+                state = index_data.get("state", "Unknown")
+                logger.info(f"Video state: {state}")
+
+                # If video is not processed yet, wait for completion
+                if state != "Processed":
+                    logger.info(f"Video is not fully processed yet (state: {state}). Waiting for completion...")
+                    index_data = await self.wait_for_indexing(video_id)
+                    logger.info("Video processing completed! Proceeding with markdown generation...")
+            else:
+                logger.info(f"Background processing started for video: {video_name} (ID: {video_id})")
+
+                # Wait for indexing to complete (for newly uploaded videos)
+                index_data = await self.wait_for_indexing(video_id)
 
             # # Create GPT summary
             # logger.info("Creating GPT summary...")
