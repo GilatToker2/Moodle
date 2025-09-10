@@ -124,7 +124,7 @@ async def document_to_markdown(course_id: str, section_id: str, file_id: int, do
         File path in blob storage or None if failed
     """
     # Check file extension
-    supported_extensions = {'.pdf', '.doc', '.docx', '.pptx', '.png', '.jpg', '.jpeg', '.tiff', '.bmp'}
+    supported_extensions = {'.pdf', '.txt', '.doc', '.docx', '.pptx', '.png', '.jpg', '.jpeg', '.tiff', '.bmp'}
     file_ext = os.path.splitext(document_url)[1].lower()
 
     if file_ext not in supported_extensions:
@@ -142,13 +142,17 @@ async def document_to_markdown(course_id: str, section_id: str, file_id: int, do
             logger.info(f"Failed to download file to memory from raw-data container: {document_url}")
             return None
 
-        logger.info(f"Processing file in memory: {document_name}")
+        # Step 2: handle TXT separately
+        if file_ext == ".txt":
+            logger.info(f"Processing TXT file directly: {document_name}")
+            md_content = file_bytes.decode("utf-8", errors="ignore")
+        else:
+            logger.info(f"Processing file with Azure Document Intelligence: {document_name}")
+            md_content = await process_document_from_memory(file_bytes, di_client)
+            if not md_content:
+                logger.info(f"Failed to process file: {document_name}")
+                return None
 
-        # Step 2: Process document directly from memory using shared client
-        md_content = await process_document_from_memory(file_bytes, di_client)
-        if not md_content:
-            logger.info(f"Failed to process file: {document_name}")
-            return None
 
         # Add document name to the beginning of the transcription
         enhanced_md_content = f"# {document_name}\n\n{md_content}"
@@ -185,13 +189,16 @@ async def document_to_markdown(course_id: str, section_id: str, file_id: int, do
                 logger.info(f"Failed to download file to memory from raw-data container: {document_url}")
                 return None
 
-            logger.info(f"Processing file in memory: {document_name}")
-
-            # Step 2: Process document directly from memory using shared client
-            md_content = await process_document_from_memory(file_bytes, di_client)
-            if not md_content:
-                logger.info(f"Failed to process file: {document_name}")
-                return None
+            # Step 2: handle TXT separately
+            if file_ext == ".txt":
+                logger.info(f"Processing TXT file directly: {document_name}")
+                md_content = file_bytes.decode("utf-8", errors="ignore")
+            else:
+                logger.info(f"Processing file with Azure Document Intelligence: {document_name}")
+                md_content = await process_document_from_memory(file_bytes, di_client)
+                if not md_content:
+                    logger.info(f"Failed to process file: {document_name}")
+                    return None
 
             # Add document name to the beginning of the transcription
             enhanced_md_content = f"# {document_name}\n\n{md_content}"
