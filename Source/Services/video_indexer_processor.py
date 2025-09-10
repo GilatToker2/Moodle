@@ -11,6 +11,7 @@ from Config.config import (
     VIDEO_INDEXER_SUB_ID,
     VIDEO_INDEXER_RG,
     VIDEO_INDEXER_VI_ACC,
+    LOGIC_APP_URL,
 )
 from dotenv import load_dotenv
 from VideoIndexerClient.VideoIndexerClient import VideoIndexerClient
@@ -431,6 +432,59 @@ class VideoIndexerManager:
         secs = seconds % 60
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
+    async def _send_callback_notification(self, callback_url: str, status: str,
+                                          blob_path: str = None, error_message: str = None,
+                                          video_name: str = None, file_id: int = None, video_id: str = None):
+        """
+        Send callback notification when video processing is completed
+
+        Args:
+            callback_url: URL to send the notification to
+            status: "success" or "failed"
+            blob_path: Path to final file (in case of success)
+            error_message: Error message (in case of failure)
+            video_name: Video name
+            file_id: File identifier
+            video_id: Video ID from Video Indexer
+        """
+        # Always log the completion status, regardless of callback URL
+        logger.info(f"Video processing completed with status: {status}")
+        logger.info(f"Video: {video_name} (File ID: {file_id})")
+        if blob_path:
+            logger.info(f"Result saved to: {blob_path}")
+        if error_message:
+            logger.error(f"Error: {error_message}")
+
+        # If no callback URL provided, just log and return
+        if not callback_url:
+            logger.info("Callback notification sent - No callback URL provided")
+            return
+
+        try:
+            # Create payload with requested fields
+            payload = {
+                "blob_path": blob_path,
+                "success": status == "success",
+                "video_name": video_name,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # Add video_id only if available
+            if video_id:
+                payload["video_id"] = video_id
+
+            logger.info(f"Sending callback notification to {callback_url}")
+            logger.info(f"Callback payload: {payload}")
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(callback_url, json=payload)
+                response.raise_for_status()
+                logger.info(
+                    f"Callback notification sent successfully to {callback_url} - Response status: {response.status_code}")
+
+        except Exception as e:
+            logger.error(f"Failed to send callback notification to {callback_url}: {str(e)}")
+
     def parse_insights_to_md(self, structured_data: Dict) -> str:
         """Convert video data to Markdown format"""
         md_content = []
@@ -645,6 +699,9 @@ class VideoIndexerManager:
     async def _background_process_video(self, video_id: str, course_id: str, section_id: str, file_id: int,
                                         video_name: str, blob_manager_processed=None, from_existing_id: bool = False):
         """Background processing of video after upload - runs as async task"""
+        # Auto-load callback URL from configuration
+        callback_url = LOGIC_APP_URL
+
         try:
             if from_existing_id:
                 logger.info(f"Background processing started for video from existing ID: {video_name} (ID: {video_id})")
@@ -731,15 +788,47 @@ class VideoIndexerManager:
 
             if success:
                 logger.info(f"Final file uploaded successfully to processeddata container: {target_blob_path}")
+
+                # Send success callback notification
+                await self._send_callback_notification(
+                    callback_url=callback_url,
+                    status="success",
+                    blob_path=target_blob_path,
+                    video_name=video_name,
+                    file_id=file_id,
+                    video_id=video_id
+                )
             else:
                 logger.info(f"Failed to upload final file to processeddata container")
+
+                # Send failure callback notification
+                await self._send_callback_notification(
+                    callback_url=callback_url,
+                    status="failed",
+                    error_message="Failed to upload final file to blob storage",
+                    video_name=video_name,
+                    file_id=file_id,
+                    video_id=video_id
+                )
 
             # Cleanup: delete video from Video Indexer
             logger.info("Cleaning up unnecessary containers...")
             await self.delete_video(video_id)
 
+            logger.info(f"Video processing completed successfully for {video_name}")
+
         except Exception as e:
             logger.info(f"Background video processing failed for {video_name}: {str(e)}")
+
+            # Send general failure callback notification
+            await self._send_callback_notification(
+                callback_url=callback_url,
+                status="failed",
+                error_message=str(e),
+                video_name=video_name,
+                file_id=file_id,
+                video_id=video_id
+            )
 
 
 async def main():

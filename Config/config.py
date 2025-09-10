@@ -32,6 +32,9 @@ VIDEO_INDEXER_RG = os.getenv("VIDEO_INDEXER_RG", "Moodle-RG")
 VIDEO_INDEXER_VI_ACC = os.getenv("VIDEO_INDEXER_VI_ACC", "moodle-VI")
 VIDEO_INDEXER_TOKEN = os.getenv("VIDEO_INDEXER_TOKEN")
 
+# Webhook Configuration
+LOGIC_APP_URL = os.getenv("LOGIC_APP_URL")
+
 # Azure Search Configuration
 SEARCH_SERVICE_NAME = os.getenv("SEARCH_SERVICE_NAME")
 SEARCH_API_KEY = os.getenv("SEARCH_API_KEY")

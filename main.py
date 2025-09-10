@@ -10,9 +10,9 @@ Required config.py settings:
 - VIDEO_INDEXER_ACCOUNT_ID
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import Optional, List, Dict, Any
 import uvicorn
 from contextlib import asynccontextmanager
@@ -25,7 +25,8 @@ from Config.config import (
     AZURE_FORM_RECOGNIZER_ENDPOINT,
     AZURE_OPENAI_API_KEY,
     AZURE_OPENAI_ENDPOINT,
-    AZURE_OPENAI_API_VERSION
+    AZURE_OPENAI_API_VERSION,
+    LOGIC_APP_URL
 )
 # Import modules
 from Source.Services.files_DocAI_processor import document_to_markdown
@@ -556,6 +557,8 @@ async def process_video_file(request: ProcessVideoRequest):
     }
     ```
 
+    **Note:** Callback notifications are automatically sent to the Logic App URL configured in LOGIC_APP_URL environment variable when video processing completes.
+
     **Returns:**
     - success: Boolean indicating if the operation was successful
     - blob_path: Path to the created markdown file in blob storage (or None if failed)
@@ -649,6 +652,8 @@ async def process_video_from_id(request: ProcessVideoFromIdRequest):
         "video_id": "n7qnox2f7w"
     }
     ```
+
+    **Note:** Callback notifications are automatically sent to the Logic App URL configured in LOGIC_APP_URL environment variable when video processing completes.
 
     **Returns:**
     - success: Boolean indicating if the operation was successful
@@ -1410,8 +1415,10 @@ async def create_syllabus_from_course_summary(request: CreateSyllabusRequest):
         )
 
 
+
+
 # ================================
-# 🚀 SERVER STARTUP
+#  SERVER STARTUP
 # ================================
 
 if __name__ == "__main__":
