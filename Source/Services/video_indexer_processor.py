@@ -476,7 +476,7 @@ class VideoIndexerManager:
             logger.info(f"Sending callback notification to {callback_url}")
             logger.info(f"Callback payload: {payload}")
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(callback_url, json=payload)
                 response.raise_for_status()
                 logger.info(
