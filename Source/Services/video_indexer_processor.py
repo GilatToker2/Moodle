@@ -482,6 +482,7 @@ class VideoIndexerManager:
                 logger.info(
                     f"Callback notification sent successfully to {callback_url} - Response status: {response.status_code}")
 
+
         except Exception as e:
             logger.error(f"Failed to send callback notification to {callback_url}: {str(e)}")
 
